@@ -2,8 +2,8 @@ FROM python:3.8.13-slim-buster
 
 WORKDIR /code
 
-RUN python -m venv venv
-ENV PATH="venv/bin:$PATH"
+# RUN python -m venv venv
+# ENV PATH="venv/bin:$PATH"
 ENV GOTENBERG_API_URL=http://host.docker.internal:3000
 
 COPY ./requirements.txt /code/requirements.txt
