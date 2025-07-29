@@ -32,6 +32,7 @@ docker compose up -d
 
 - **[📋 Installation Guide](docs/installation.md)** - Complete setup instructions
 - **[🔧 Usage Guide](docs/usage.md)** - Service usage and templating examples
+- **[🐳 Docker Integration Guide](docs/integration.md)** - Integrate with existing Docker Compose stacks
 
 ## 🛠️ Technology Stack
 

@@ -81,6 +81,9 @@ Complete setup instructions for all environments
 🔧 **[Usage Guide](docs/usage)**  
 Service usage with templating examples
 
+🐳 **[Docker Integration Guide](docs/integration)**  
+Integrate with existing Docker Compose stacks
+
 </div>
 
 ---
