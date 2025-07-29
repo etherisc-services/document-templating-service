@@ -8,6 +8,7 @@ on:
       - '_config.yml'
       - 'Gemfile*'
       - 'index.md'
+      - '.lycheerc.toml'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -57,4 +58,40 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4 
+        uses: actions/deploy-pages@v4
+
+  link-check:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.event_name != 'pull_request'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Check links with Lychee
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --config .lycheerc.toml --verbose --no-progress https://etherisc-services.github.io/document-templating-service/
+          fail: true
+          format: markdown
+          output: lychee-report.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload link check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: link-check-report
+          path: lychee-report.md
+          retention-days: 7
+
+      - name: Link check report
+        if: failure()
+        run: |
+          echo "❌ Link check failed! Some links are broken."
+          echo "Check the previous step for details."
+          exit 1 

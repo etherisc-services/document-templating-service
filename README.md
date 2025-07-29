@@ -57,7 +57,7 @@ Feel free to open issues and pull requests. Please include a description with yo
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 👨‍💻 Original Author
+## 👨‍💻 Author
 
 **Etherisc GmbH** (Originally created by [M.B.C.M (PapiHack)](https://github.com/PapiHack))  
 [![Twitter](https://img.shields.io/twitter/follow/the_it_dev?style=social)](https://twitter.com/the_it_dev)
