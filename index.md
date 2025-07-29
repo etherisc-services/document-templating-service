@@ -13,7 +13,7 @@ A lightweight microservice for processing Word document templates with data inje
 {: .fs-6 .fw-300 }
 
 [Get started now](#getting-started){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
-[View on GitHub](https://github.com/PapiHack/document-templating-service){: .btn .fs-5 .mb-4 .mb-md-0 }
+[View on GitHub](https://github.com/etherisc-services/document-templating-service){: .btn .fs-5 .mb-4 .mb-md-0 }
 
 ---
 
@@ -41,7 +41,7 @@ A lightweight microservice for processing Word document templates with data inje
 The fastest way to get up and running:
 
 ```bash
-git clone https://github.com/PapiHack/document-templating-service.git
+git clone https://github.com/etherisc-services/document-templating-service.git
 cd document-templating-service
 docker compose up -d
 ```
@@ -96,7 +96,7 @@ This service combines the power of [docxtpl](https://docxtpl.readthedocs.io/) fo
 
 ### Original Author
 
-**[M.B.C.M (PapiHack)](https://github.com/PapiHack)**  
+**Etherisc GmbH** (Originally created by [M.B.C.M (PapiHack)](https://github.com/PapiHack))  
 
 ---
 
@@ -106,4 +106,4 @@ We welcome contributions! Please feel free to submit a Pull Request. Make sure t
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/PapiHack/document-templating-service/blob/master/LICENSE) file for details. 
+This project is licensed under the MIT License - see the [LICENSE](https://github.com/etherisc-services/document-templating-service/blob/master/LICENSE) file for details. 

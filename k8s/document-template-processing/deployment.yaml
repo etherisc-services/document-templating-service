@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: document-template-processing
-          image: papihack/document-template-processor
+          image: ghcr.io/etherisc-services/document-templating-service:latest
           env:
             - name: GOTENBERG_API_URL
               valueFrom:

@@ -26,4 +26,4 @@ Welcome to the Document Template Processing Service documentation.
 
 This service combines the power of [docxtpl](https://github.com/elapouya/python-docx-template) for Word document templating with [Gotenberg](https://gotenberg.dev) for PDF conversion, providing a simple REST API for document processing workflows.
 
-**Original Author:** [M.B.C.M (PapiHack)](https://github.com/PapiHack) 
+**Copyright:** Etherisc GmbH (Originally created by [M.B.C.M (PapiHack)](https://github.com/PapiHack)) 
