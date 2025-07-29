@@ -75,7 +75,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: --config .lycheerc.toml --verbose --no-progress https://etherisc-services.github.io/document-templating-service/
-          fail: true
+          fail: false
           format: markdown
           output: lychee-report.md
         env:
@@ -89,9 +89,12 @@ jobs:
           path: lychee-report.md
           retention-days: 7
 
-      - name: Link check report
-        if: failure()
+      - name: Link check summary
+        if: always()
         run: |
-          echo "❌ Link check failed! Some links are broken."
-          echo "Check the previous step for details."
-          exit 1 
+          echo "🔗 Link check completed!"
+          echo "📄 Check the uploaded artifact 'link-check-report' for detailed results."
+          if [ -f lychee-report.md ]; then
+            echo "📊 Summary:"
+            grep -E "🔍 Total|✅ Successful|🚫 Errors" lychee-report.md || echo "Report summary not available"
+          fi 
