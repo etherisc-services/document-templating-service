@@ -20,6 +20,8 @@ exclude = [
     "^https?://localhost",
     "^https?://127.0.0.1",
     "^https?://0.0.0.0",
+    "localhost:",
+    "^http://localhost:8000",
     
     # Email addresses
     "^mailto:",
@@ -44,6 +46,11 @@ exclude = [
     
     # PyPI (can be flaky)
     "^https?://pypi.org",
+    
+    # Container registries (not meant to be browsed)
+    "^https?://ghcr.io",
+    "^https?://.*\\.azurecr\\.io",
+    "^https?://.*\\.amazonaws\\.com.*ecr",
 ]
 
 # Include only these schemes
