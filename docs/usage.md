@@ -128,6 +128,7 @@ Your invoice amount is $150.00.
 
 **Template:**
 ```
+{% raw %}
 Dear {{name}},
 
 {%- if premium_customer %}
@@ -139,6 +140,7 @@ Thank you for your business!
 {%- if amount > 100 %}
 This is a large order. Processing may take 2-3 business days.
 {%- endif %}
+{% endraw %}
 ```
 
 **Data:**
@@ -163,6 +165,7 @@ This is a large order. Processing may take 2-3 business days.
 
 **Template:**
 ```
+{% raw %}
 Invoice Items:
 
 {%- for item in items %}
@@ -170,6 +173,7 @@ Invoice Items:
 {%- endfor %}
 
 Total: ${{total}}
+{% endraw %}
 ```
 
 **Data:**
@@ -201,6 +205,7 @@ Total: $270.00
 
 **Template:**
 ```
+{% raw %}
 Customer Orders Report
 
 {%- for customer in customers %}
@@ -223,25 +228,30 @@ No orders found.
 {%- endif %}
 
 {%- endfor %}
+{% endraw %}
 ```
 
 #### Table Generation
 
 **Template (in a Word table):**
 ```
+{% raw %}
 | Item | Qty | Price | Total |
 |------|-----|-------|-------|
 {%- for item in items %}
 | {{item.name}} | {{item.qty}} | ${{item.price}} | ${{item.qty * item.price}} |
 {%- endfor %}
+{% endraw %}
 ```
 
 #### Date Formatting
 
 **Template:**
 ```
+{% raw %}
 Invoice Date: {{invoice_date|date_format('%B %d, %Y')}}
 Due Date: {{due_date|date_format('%m/%d/%Y')}}
+{% endraw %}
 ```
 
 **Data:**
@@ -256,11 +266,11 @@ Due Date: {{due_date|date_format('%m/%d/%Y')}}
 
 | Syntax | Purpose | Example |
 |--------|---------|---------|
-| `{{variable}}` | Variable substitution | `{{name}}` |
-| `{%- if condition %}...{%- endif %}` | Conditional | `{%- if amount > 100 %}Large order{%- endif %}` |
-| `{%- for item in list %}...{%- endfor %}` | Loop | `{%- for item in items %}{{item}}{%- endfor %}` |
-| `{%- else %}` | Else clause | Used with if statements |
-| `{{variable\|filter}}` | Apply filter | `{{date\|date_format('%Y-%m-%d')}}` |
+| `{% raw %}{{variable}}{% endraw %}` | Variable substitution | `{% raw %}{{name}}{% endraw %}` |
+| `{% raw %}{%- if condition %}...{%- endif %}{% endraw %}` | Conditional | `{% raw %}{%- if amount > 100 %}Large order{%- endif %}{% endraw %}` |
+| `{% raw %}{%- for item in list %}...{%- endfor %}{% endraw %}` | Loop | `{% raw %}{%- for item in items %}{{item}}{%- endfor %}{% endraw %}` |
+| `{% raw %}{%- else %}{% endraw %}` | Else clause | Used with if statements |
+| `{% raw %}{{variable|filter}}{% endraw %}` | Apply filter | `{% raw %}{{date|date_format('%Y-%m-%d')}}{% endraw %}` |
 
 ### Data Types
 
@@ -309,6 +319,7 @@ The API returns appropriate HTTP status codes:
 Create a Word document with this content:
 
 ```
+{% raw %}
 INVOICE
 
 Date: {{invoice_date}}
@@ -342,6 +353,7 @@ TOTAL: ${{total}}
 {%- if notes %}
 Notes: {{notes}}
 {%- endif %}
+{% endraw %}
 ```
 
 ### JSON Data
