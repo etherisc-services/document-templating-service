@@ -1,10 +1,9 @@
-version: '3'
 services:
   gotenberg:
     container_name: gotenberg-service
-    # replace image with gotenberg/gotenberg:7-cloudrun or thecodingmachine/gotenberg:7-cloudrun
+    # replace image with gotenberg/gotenberg:8-cloudrun or thecodingmachine/gotenberg:8-cloudrun
     # if you plan to run it on cloud
-    image: gotenberg/gotenberg:7
+    image: gotenberg/gotenberg:8
     restart: always
     ports:
       - "3000:3000"

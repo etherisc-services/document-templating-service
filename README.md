@@ -1,141 +1,67 @@
-# 🚀 Document Template Processing Service 🚀
+# 🚀 Document Template Processing Service
 
-[![python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-3776AB?style=for-the-badge&logo=fastapi&logoColor=white)
-[![docker](https://img.shields.io/badge/Docker-3776AB?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com/r/papihack/document-template-processor)
-[![kubernetes](https://img.shields.io/badge/kubernetes-3776AB?style=for-the-badge&logo=kubernetes&logoColor=white)](https://github.com/PapiHack/document-templating-service/tree/master/k8s)
-![Issues](https://img.shields.io/github/issues/PapiHack/document-templating-service?style=for-the-badge&logo=appveyor)
-![PR](https://img.shields.io/github/issues-pr/PapiHack/document-templating-service?style=for-the-badge&logo=appveyor)
-[![MIT licensed](https://img.shields.io/badge/license-mit-blue?style=for-the-badge&logo=appveyor)](./LICENSE)
-[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source-175x29.png?v=103)](https://github.com/ellerbrock/open-source-badges/)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-1.1.0-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://hub.docker.com)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](./LICENSE)
+[![Documentation](https://img.shields.io/badge/Documentation-Available-green?style=for-the-badge)](./docs/)
 
-This is a simple and lightweight microservice that allow you to process your `Word` documents with a `templating system`, in order to hydrate it by injecting data or variables defined in it and get back its associated `PDF` result.
+A lightweight microservice for processing Word document templates with data injection and PDF conversion. Combines the power of [docxtpl](https://docxtpl.readthedocs.io/) templating with [Gotenberg](https://gotenberg.dev) PDF generation.
 
-Feel free to checkout the [official docker image](https://hub.docker.com/r/papihack/document-template-processor) on my docker hub.
+## ✨ Features
 
-## Notes
+- 📄 Process `.docx` templates with dynamic data
+- 🔄 Convert results to PDF automatically  
+- 🚀 Fast REST API built with FastAPI
+- 🐳 Docker-ready with compose setup
+- ☸️ Kubernetes deployment manifests
+- 📚 Comprehensive documentation and examples
 
-For transforming the `docx` result to `PDF` you'll need have an instance of [Gotenberg](https://gotenberg.dev) up and running and provide its `ROOT URL` as an environment variable to the microservice.
+## 🚀 Quick Start
 
-## Installation
+```bash
+# Clone and start with Docker Compose
+git clone <repository-url>
+cd document-templating-service
+docker compose up -d
 
-- First and foremost you'll need to have an instance of Gotenberg. You can easily have one by running the following docker command : 
+# API will be available at http://localhost:8000/docs
+```
 
-        docker run --name gotenberg -d -p 3000:3000 gotenberg/gotenberg:7
+## 📖 Documentation
 
+- **[📋 Installation Guide](docs/installation.md)** - Complete setup instructions
+- **[🔧 Usage Guide](docs/usage.md)** - API documentation and templating examples
+- **[📑 API Docs](http://localhost:8000/docs)** - Interactive API documentation (when running)
 
-- After this step done, you have the two (2) options in order to run this service :
+## 🛠️ Technology Stack
 
-    - Direct run by following the steps below :
+- **Backend:** FastAPI 0.115.6, Python 3.12
+- **Templating:** docxtpl 0.19.0 (Jinja2-based)
+- **PDF Generation:** Gotenberg 8
+- **Deployment:** Docker, Kubernetes
 
-        - Rename the file `.env.example` at the root level of this project by simply `.env`
+## 📊 Updated Dependencies (v1.1.0)
 
-        - Set the value of the `GOTENBERG_API_URL` environment variable defined in it with yours (in our example => http://localhost:3000)
+This version includes major dependency updates:
+- Python 3.8 → 3.12
+- FastAPI 0.68.0 → 0.115.6  
+- Pydantic 1.8.2 → 2.10.3
+- All dependencies updated to latest stable versions
 
-        - Install the necessary dependencies by running :
-        
-                pip install -r requirements.txt (you can create virtual env if you want it)
+## 🤝 Contributing
 
-        - Start the microservice by running:
-                
-                 uvicorn main:app
+Feel free to open issues and pull requests. Please include a description with your PR.
 
-        - Visit the `API Documentation` at <http://localhost:8000/docs> or <http://localhost:8000/redoc>
+## 📜 License
 
-    - Using docker to build and launch a container :
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-        - In your terminal, at the root of this project, build an image of this service by running : 
-        
-                docker build -t document-template-processing-service .
+## 👨‍💻 Original Author
 
-        - Start the service by creating a container with : 
-        
-                docker run -d -p 8000:8000 -e GOTENBERG_API_URL=your-host-ip:3000 --name dtps document-template-processing-service
+**[M.B.C.M (PapiHack)](https://github.com/PapiHack)**  
+[![Twitter](https://img.shields.io/twitter/follow/the_it_dev?style=social)](https://twitter.com/the_it_dev)
 
-        - An official image is also available on my [docker hub](https://hub.docker.com/r/papihack/document-template-processor), so you can simply run
-          the following command and skip the build step if you want too :
-        
-                docker run -d -p 8000:8000 -e GOTENBERG_API_URL=your-host-ip:3000 --name dtps papihack/document-template-processor
+---
 
-        - Visit the `API Documentation` at <http://localhost:8000/docs> or <http://localhost:8000/redoc>
-
-
-## Up & Running with Docker Compose
-
-If you are lazy like me 😄, you can setup the project by just running the following command :
-
-        docker-compose up -d
-
-And stop all the service with :
-
-        docker-compose stop
-
-Or stop and remove all the service with :
-
-        docker-compose down
-
-
-## Up & Running with Kubernetes
-
-If you want to deploy this project on your kubernetes cluster, you can inspect and/or edit the manifest files available in the 
-`k8s` directory before apply them.
-
-Start by creating the namespace named `utils` by running :
-
-        kubectl apply -f k8s/namespace.yaml
-
-Then, you can deploy the necessary components by running :
-
-        kubectl apply -f k8s/gotenberg -f k8s/document-template-processing
-
-After that, feel free to create an `ingress` for `svc/document-template-processing` if you are using such kind of k8s component.
-
-Otherwise, you can port forward the api service by running the following command before visiting <http://localhost:8000/docs> :
-
-        kubectl port-forward svc/document-template-processing 8000:8000 -n utils
-
-
-## Usage
-
-For now, you have an endpoint named `/api/v1/process-template-document` that will allow you to make a `POST HTTP REQUEST` by sending two (2) required parameters :
-
-- The `file` parameter that contains your `Word Document Template`
-
-- The `data` parameter that is a `JSON object` with data or variable that we are going to inject in the `file` parameter
-
-As a response, you'll get back its corresponding `PDF` file as a result.
-
-### Example
-
-<table>
-    <tr>
-        <th>Template Example</th>
-        <th>Postman Test Result</th>
-    </tr>
-    <tr>
-        <td><img src="./screenshots/invoice-template-doc-example.png"/></td>
-        <td><img src="./screenshots/postman-test-screenshot.png"/></td>
-    </tr>
-</table>
-
-## 🚨 Cautions for Cloud Run 🚨
-
-If you plan to run this on cloud, please change the `gotenberg` docker image with `gotenberg/gotenberg:7-cloudrun` or `thecodingmachine/gotenberg:7-cloudrun` in `docker-compose.yaml` file. This will allow you to save cost and so on.
-
-For more infos, please look at [Gotenberg Docs](https://gotenberg.dev/docs/get-started/cloud-run).
-
-
-### Screenshots
-
-![screenshot](./screenshots/swagger-doc.png)
-
-## Contributing
-
-Feel free to make a PR or report an issue 😃
-
-Oh, one more thing, please do not forget to put a description when you make your PR 🙂
-
-## Author
-
-- [M.B.C.M](https://github.com/PapiHack)
-  [![My Twitter Link](https://img.shields.io/twitter/follow/the_it_dev?style=social)](https://twitter.com/the_it_dev)
+> 💡 **Need help?** Check the [documentation](docs/) or open an issue!

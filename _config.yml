@@ -1,0 +1,92 @@
+title: Document Template Processing Service
+description: >-
+  A lightweight microservice for processing Word document templates with data injection and PDF conversion.
+  Combines the power of docxtpl templating with Gotenberg PDF generation.
+
+url: ""
+baseurl: ""
+
+# Theme
+theme: just-the-docs
+color_scheme: light
+
+# Logo and favicon
+logo: "/assets/images/logo.png"
+
+# Navigation
+nav_sort: case_insensitive
+
+# Search
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 2
+  preview_words_before: 3
+  preview_words_after: 3
+  tokenizer_separator: /[\s/]+/
+  rel_url: true
+  button: false
+
+# Heading anchors
+heading_anchors: true
+
+# Footer content
+footer_content: "Copyright &copy; 2024 M.B.C.M (PapiHack). Distributed under the <a href=\"https://github.com/PapiHack/document-templating-service/tree/master/LICENSE\">MIT license</a>."
+
+# Aux links
+aux_links:
+  "GitHub Repository":
+    - "//github.com/PapiHack/document-templating-service"
+  "Docker Hub":
+    - "//hub.docker.com/r/papihack/document-template-processor"
+
+aux_links_new_tab: true
+
+# Plugins
+plugins:
+  - jekyll-feed
+  - jekyll-sitemap
+  - jekyll-seo-tag
+
+# Exclude from processing
+exclude:
+  - .sass-cache/
+  - .jekyll-cache/
+  - gemfiles/
+  - Gemfile
+  - Gemfile.lock
+  - node_modules/
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
+  - "*.py"
+  - "*.dockerfile"
+  - "docker-compose.yml"
+  - "requirements.txt"
+  - "temp/"
+  - "screenshots/"
+
+# Include
+include:
+  - "_includes"
+  - "_layouts"
+  - "_sass"
+  - "docs"
+
+# Collections
+collections:
+  docs:
+    permalink: "/:collection/:name/"
+    output: true
+
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: "default"
+  - scope:
+      path: "docs"
+    values:
+      layout: "default"
+      nav_exclude: false 

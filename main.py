@@ -12,7 +12,7 @@ app = FastAPI(
         This is the documentation of the REST API exposed by the document template processing microservice.
         This will allow you to inject data in a specific word document template and get the pdf format as a result. 🚀🚀🚀
     """,
-    version="1.0.0"
+    version="1.1.0"
 )
 
 SERVICE_STATUS = {'status': 'Service is healthy !'}
