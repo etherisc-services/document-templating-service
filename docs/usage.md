@@ -2,7 +2,7 @@
 layout: default
 title: Usage Guide
 nav_order: 3
-description: "Comprehensive API documentation and templating examples for the Document Template Processing Service."
+description: "Comprehensive service usage and templating examples for the Document Template Processing Service."
 ---
 
 # Usage Guide
@@ -15,7 +15,6 @@ The service provides a REST API for processing Word document templates with data
 
 ### Base URL
 - Local: `http://localhost:8000`
-- API Documentation: `http://localhost:8000/docs`
 
 ## API Endpoints
 
@@ -396,5 +395,4 @@ This will generate a professional PDF invoice with all the data properly formatt
 
 - [docxtpl Documentation](https://docxtpl.readthedocs.io/) - Complete templating syntax
 - [Jinja2 Documentation](https://jinja.palletsprojects.com/) - Underlying template engine
-- [Gotenberg Documentation](https://gotenberg.dev/) - PDF conversion service
-- [FastAPI Documentation](https://fastapi.tiangolo.com/) - API framework documentation 
+- [Gotenberg Documentation](https://gotenberg.dev/) - PDF conversion service 

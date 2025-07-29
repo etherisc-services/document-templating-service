@@ -30,8 +30,6 @@ The easiest way to get started is using Docker Compose, which sets up both the s
    ```
 
 3. **Verify the installation:**
-   - API Documentation: http://localhost:8000/docs
-   - Alternative docs: http://localhost:8000/redoc
    - Health check: http://localhost:8000/
 
 4. **Stop the services:**
@@ -146,10 +144,7 @@ After installation, verify everything is working:
    curl http://localhost:8000/
    ```
 
-2. **API Documentation:**
-   Visit http://localhost:8000/docs
-
-3. **Test with a sample document:**
+2. **Test with a sample document:**
    See the [Usage Guide](usage.md) for examples.
 
 ## Troubleshooting
@@ -171,6 +166,6 @@ After installation, verify everything is working:
 
 ### Getting Help
 
-- Check the [Usage Guide](usage.md) for API documentation
+- Check the [Usage Guide](usage.md) for service usage examples
 - Review the main [README](../README.md)
 - Open an issue on the GitHub repository 

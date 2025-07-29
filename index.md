@@ -46,15 +46,13 @@ cd document-templating-service
 docker compose up -d
 ```
 
-Your API will be available at:
-- **API Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Alternative Docs**: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+Your service will be available at:
 - **Health Check**: [http://localhost:8000/](http://localhost:8000/)
 
 ### Next Steps
 
 1. 📖 Read the **[Installation Guide](docs/installation)** for detailed setup options
-2. 🔧 Check the **[Usage Guide](docs/usage)** for API documentation and examples
+2. 🔧 Check the **[Usage Guide](docs/usage)** for service usage and examples
 3. 🚀 Start building your document templates!
 
 ---
@@ -81,10 +79,7 @@ curl -X POST \
 Complete setup instructions for all environments
 
 🔧 **[Usage Guide](docs/usage)**  
-API documentation with templating examples
-
-📑 **[API Reference](http://localhost:8000/docs)**  
-Interactive API documentation (when service is running)
+Service usage with templating examples
 
 </div>
 

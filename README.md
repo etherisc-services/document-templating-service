@@ -25,14 +25,13 @@ git clone <repository-url>
 cd document-templating-service
 docker compose up -d
 
-# API will be available at http://localhost:8000/docs
+# Service will be available at http://localhost:8000
 ```
 
 ## 📖 Documentation
 
 - **[📋 Installation Guide](docs/installation.md)** - Complete setup instructions
-- **[🔧 Usage Guide](docs/usage.md)** - API documentation and templating examples
-- **[📑 API Docs](http://localhost:8000/docs)** - Interactive API documentation (when running)
+- **[🔧 Usage Guide](docs/usage.md)** - Service usage and templating examples
 
 ## 🛠️ Technology Stack
 
