@@ -3,8 +3,8 @@ description: >-
   A lightweight microservice for processing Word document templates with data injection and PDF conversion.
   Combines the power of docxtpl templating with Gotenberg PDF generation.
 
-url: ""
-baseurl: ""
+url: "https://etherisc-services.github.io"
+baseurl: "/document-templating-service"
 
 # Theme
 theme: just-the-docs
@@ -31,14 +31,14 @@ search:
 heading_anchors: true
 
 # Footer content
-footer_content: "Copyright &copy; 2024 M.B.C.M (PapiHack). Distributed under the <a href=\"https://github.com/PapiHack/document-templating-service/tree/master/LICENSE\">MIT license</a>."
+footer_content: "Copyright &copy; 2024 M.B.C.M (PapiHack). Distributed under the <a href=\"https://github.com/etherisc-services/document-templating-service/tree/master/LICENSE\">MIT license</a>."
 
 # Aux links
 aux_links:
   "GitHub Repository":
-    - "//github.com/PapiHack/document-templating-service"
-  "Docker Hub":
-    - "//hub.docker.com/r/papihack/document-template-processor"
+    - "//github.com/etherisc-services/document-templating-service"
+  "Docker Images":
+    - "//ghcr.io/etherisc-services/document-templating-service"
 
 aux_links_new_tab: true
 
