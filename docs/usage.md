@@ -284,18 +284,259 @@ The service accepts various data types in the JSON payload:
 
 ### Error Handling
 
-The API returns appropriate HTTP status codes:
+The API provides comprehensive error handling with detailed error information for debugging and troubleshooting.
+
+#### HTTP Status Codes
 
 - **200 OK:** Successful processing
-- **400 Bad Request:** Missing or invalid parameters
-- **500 Internal Server Error:** Processing errors
+- **400 Bad Request:** Client errors (invalid input, template errors, etc.)
+- **500 Internal Server Error:** Server errors (service failures, unexpected errors)
 
-**Error Response Example:**
+#### Error Response Format
+
+All error responses follow a structured format:
+
 ```json
 {
   "status": "error",
-  "message": "file is required"
+  "error_type": "specific_error_category",
+  "message": "Human-readable error description",
+  "details": {
+    "additional": "contextual information",
+    "for": "debugging purposes"
+  }
 }
+```
+
+#### Error Categories
+
+##### File Processing Errors
+
+**Missing File (400):**
+```json
+{
+  "status": "error",
+  "error_type": "missing_file",
+  "message": "No file provided or filename is empty",
+  "details": {
+    "requirement": "A valid .docx file must be uploaded"
+  }
+}
+```
+
+**Invalid File Type (400):**
+```json
+{
+  "status": "error",
+  "error_type": "invalid_file_type", 
+  "message": "Invalid file type. Only .docx files are supported",
+  "details": {
+    "provided_filename": "document.pdf",
+    "supported_types": [".docx"],
+    "requirement": "Upload a Microsoft Word .docx file"
+  }
+}
+```
+
+**File Too Large (400):**
+```json
+{
+  "status": "error",
+  "error_type": "file_too_large",
+  "message": "File too large. Maximum size is 50MB",
+  "details": {
+    "max_size_mb": 50,
+    "file_size_bytes": 67108864
+  }
+}
+```
+
+**Corrupted File (400):**
+```json
+{
+  "status": "error",
+  "error_type": "invalid_docx_format",
+  "message": "Invalid or corrupted .docx file",
+  "details": {
+    "file": "template.docx",
+    "error": "not a valid docx file",
+    "suggestion": "Ensure the file is a valid Microsoft Word .docx document"
+  }
+}
+```
+
+##### Template Processing Errors
+
+**Missing Template Data (400):**
+```json
+{
+  "status": "error",
+  "error_type": "missing_template_data",
+  "message": "No template data provided",
+  "details": {
+    "requirement": "Provide JSON data for template variable injection",
+    "example": "{\"name\": \"John\", \"company\": \"Acme Corp\"}"
+  }
+}
+```
+
+**Invalid JSON (400):**
+```json
+{
+  "status": "error",
+  "error_type": "invalid_json",
+  "message": "Invalid JSON data: Expecting ',' delimiter: line 3 column 15",
+  "details": {
+    "json_error": "Expecting ',' delimiter: line 3 column 15",
+    "line": 3,
+    "column": 15
+  }
+}
+```
+
+**Template Syntax Error (400):**
+```json
+{
+  "status": "error",
+  "error_type": "template_syntax_error",
+  "message": "Template syntax error: unexpected 'end of template'",
+  "details": {
+    "file": "template.docx",
+    "line": 5,
+    "column": 12,
+    "template_name": "template.docx",
+    "syntax_error": "unexpected 'end of template'"
+  }
+}
+```
+
+**Undefined Variable (400):**
+```json
+{
+  "status": "error",
+  "error_type": "undefined_variable",
+  "message": "Undefined variable in template: 'customer_name' is undefined",
+  "details": {
+    "file": "template.docx",
+    "undefined_variable": "'customer_name' is undefined",
+    "suggestion": "Check your template variables match the provided data"
+  }
+}
+```
+
+**Template Runtime Error (400):**
+```json
+{
+  "status": "error", 
+  "error_type": "template_runtime_error",
+  "message": "Template runtime error: unsupported operand type(s) for *: 'str' and 'int'",
+  "details": {
+    "file": "template.docx",
+    "runtime_error": "unsupported operand type(s) for *: 'str' and 'int'"
+  }
+}
+```
+
+##### PDF Conversion Errors
+
+**Gotenberg Connection Error (500):**
+```json
+{
+  "status": "error",
+  "error_type": "gotenberg_connection_error",
+  "message": "Cannot connect to Gotenberg service: Connection refused",
+  "details": {
+    "gotenberg_url": "http://gotenberg:3000",
+    "connection_error": "Connection refused",
+    "suggestion": "Check if Gotenberg service is running and accessible"
+  }
+}
+```
+
+**Gotenberg Timeout (500):**
+```json
+{
+  "status": "error",
+  "error_type": "gotenberg_timeout", 
+  "message": "Gotenberg request timed out (60s)",
+  "details": {
+    "timeout_seconds": 60,
+    "suggestion": "Try with a smaller document or check Gotenberg service health"
+  }
+}
+```
+
+**Gotenberg Conversion Failed (500):**
+```json
+{
+  "status": "error",
+  "error_type": "gotenberg_conversion_failed",
+  "message": "Gotenberg could not process the document (unprocessable entity)",
+  "details": {
+    "gotenberg_url": "http://gotenberg:3000/forms/libreoffice/convert",
+    "status_code": 422,
+    "response_headers": {
+      "content-type": "application/json"
+    },
+    "error_data": {
+      "message": "Document format not supported"
+    }
+  }
+}
+```
+
+#### Debugging Template Issues
+
+When encountering template errors, follow these steps:
+
+1. **Check Variable Names:** Ensure template variables match your data exactly
+   ```text
+   Template: {{customer.name}}
+   Data: {"customer": {"name": "John Doe"}}  ✓
+   Data: {"customer_name": "John Doe"}       ✗
+   ```
+
+2. **Validate Template Syntax:** Use proper Jinja2 syntax
+   ```text
+   Correct: {% if items %}...{% endif %}
+   Wrong:   {% if items %}...{% end %}
+   ```
+
+3. **Check Data Types:** Ensure operations match data types
+   ```text
+   Template: {{quantity * price}}
+   Data: {"quantity": "5", "price": 10}      ✗ (string * number)
+   Data: {"quantity": 5, "price": 10}        ✓ (number * number)
+   ```
+
+4. **Use Optional Variables:** Handle optional data gracefully
+   ```text
+   Safe: {% if customer.email %}{{customer.email}}{% endif %}
+   Risky: {{customer.email}} (fails if email is missing)
+   ```
+
+#### Common Error Scenarios
+
+##### Template Variable Mismatch
+```bash
+# Template contains: {{invoice.customer_name}}
+# But data provides: {"customer": {"name": "John"}}
+# Solution: Change template to {{customer.name}} or data to {"invoice": {"customer_name": "John"}}
+```
+
+##### Invalid Template Syntax
+```bash
+# Template contains unclosed tags: {% for item in items %}...
+# Missing: {% endfor %}
+# Error: "unexpected 'end of template'"
+```
+
+##### Data Type Issues
+```bash
+# Template: Total: ${{item.quantity * item.price}}
+# Data: {"item": {"quantity": "5", "price": "10.50"}}
+# Error: can't multiply string by string
+# Solution: Use numbers: {"item": {"quantity": 5, "price": 10.50}}
 ```
 
 ## Testing with Postman
