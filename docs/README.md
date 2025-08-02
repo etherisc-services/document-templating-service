@@ -13,8 +13,9 @@ Welcome to the Document Template Processing Service documentation.
 ## Table of Contents
 
 1. **[Installation Guide](installation.md)** - Complete setup instructions to get the service running
-2. **[Usage Guide](usage.md)** - Comprehensive service usage and templating examples
-3. **[Docker Integration Guide](integration.md)** - How to integrate with existing Docker Compose stacks
+2. **[Usage Guide](usage.md)** - Comprehensive service usage and templating examples  
+3. **[Image Support Guide](image-support.md)** - How to include inline images in document templates
+4. **[Docker Integration Guide](integration.md)** - How to integrate with existing Docker Compose stacks
 
 ## Quick Links
 

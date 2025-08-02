@@ -57,7 +57,9 @@ Your service will be available at:
 
 ---
 
-## API Example
+## API Examples
+
+### Basic Template Processing
 
 Process a Word template with dynamic data:
 
@@ -66,6 +68,22 @@ curl -X POST \
   http://localhost:8000/api/v1/process-template-document \
   -F "file=@template.docx" \
   -F "data={\"name\":\"John Doe\",\"amount\":150.00}" \
+  --output result.pdf
+```
+
+### Template Processing with Images
+
+Process templates with embedded images:
+
+```bash
+# Encode image and create request
+IMAGE_BASE64=$(base64 -w 0 logo.png)
+REQUEST_DATA='{"template_data":{"name":"John Doe","logo":"{{company_logo}}"},"images":{"company_logo":{"data":"'$IMAGE_BASE64'","width_mm":50,"height_mm":20}}}'
+
+curl -X POST \
+  http://localhost:8000/api/v1/process-template-document-with-images \
+  -F "file=@template.docx" \
+  -F "request_data=$REQUEST_DATA" \
   --output result.pdf
 ```
 
@@ -80,6 +98,9 @@ Complete setup instructions for all environments
 
 🔧 **[Usage Guide](docs/usage)**  
 Service usage with templating examples
+
+🖼️ **[Image Support Guide](docs/image-support)**  
+Include inline images in document templates
 
 🐳 **[Docker Integration Guide](docs/integration)**  
 Integrate with existing Docker Compose stacks

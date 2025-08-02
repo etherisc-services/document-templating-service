@@ -46,7 +46,7 @@ Alternative health check endpoint.
 
 **POST** `/api/v1/process-template-document`
 
-Main endpoint for processing Word templates into PDFs.
+Main endpoint for processing Word templates into PDFs (without image support).
 
 **Parameters:**
 - `file` (required): Word document template (.docx file)
@@ -56,7 +56,67 @@ Main endpoint for processing Word templates into PDFs.
 
 **Response:** PDF file download
 
+### Process Template Document with Images
+
+**POST** `/api/v1/process-template-document-with-images`
+
+Enhanced endpoint for processing Word templates with inline image support.
+
+**Parameters:**
+- `file` (required): Word document template (.docx file)
+- `request_data` (required): JSON string containing template_data and optional images
+
+**Content-Type:** `multipart/form-data`
+
+**Response:** PDF file download
+
+**Request Data Structure:**
+```json
+{
+  "template_data": {
+    "customer_name": "John Doe",
+    "logo": "{{company_logo}}"
+  },
+  "images": {
+    "company_logo": {
+      "data": "base64_encoded_png_data",
+      "width_mm": 50,
+      "height_mm": 20
+    }
+  }
+}
+```
+
 **Example with curl:**
+```bash
+# Encode image to base64
+IMAGE_BASE64=$(base64 -w 0 logo.png)
+
+# Create request data
+REQUEST_DATA='{
+  "template_data": {
+    "customer_name": "John Doe",
+    "logo": "{{company_logo}}"
+  },
+  "images": {
+    "company_logo": {
+      "data": "'$IMAGE_BASE64'",
+      "width_mm": 50,
+      "height_mm": 20
+    }
+  }
+}'
+
+# Submit request
+curl -X POST http://localhost:8000/api/v1/process-template-document-with-images \
+  -F "file=@template.docx" \
+  -F "request_data=$REQUEST_DATA" \
+  -o output.pdf
+```
+
+For detailed image support documentation, see the **[Image Support Guide](image-support.md)**.
+
+**Original Endpoint Example:**
 ```bash
 curl -X POST \
   http://localhost:8000/api/v1/process-template-document \
@@ -270,6 +330,55 @@ Due Date: {{due_date|date_format('%m/%d/%Y')}}
 | `{% raw %}{%- for item in list %}...{%- endfor %}{% endraw %}` | Loop | `{% raw %}{%- for item in items %}{{item}}{%- endfor %}{% endraw %}` |
 | `{% raw %}{%- else %}{% endraw %}` | Else clause | Used with if statements |
 | `{% raw %}{{variable|filter}}{% endraw %}` | Apply filter | `{% raw %}{{date|date_format('%Y-%m-%d')}}{% endraw %}` |
+| `{% raw %}{{image_variable}}{% endraw %}` | Image insertion | `{% raw %}{{company_logo}}{% endraw %}` |
+
+### Image Support in Templates
+
+🎯 **Available in:** `/api/v1/process-template-document-with-images` endpoint only
+
+Images can be embedded directly in templates using the enhanced endpoint. Images are provided as Base64-encoded PNG data and referenced in templates using standard Jinja2 variable syntax.
+
+**Template Example:**
+```
+Company Logo: {{company_logo}}
+
+Invoice for {{customer_name}}
+Date: {{invoice_date}}
+
+Signature: {{authorized_signature}}
+```
+
+**Request Data with Images:**
+```json
+{
+  "template_data": {
+    "customer_name": "John Doe", 
+    "invoice_date": "2024-01-15",
+    "company_logo": "{{company_logo}}",
+    "authorized_signature": "{{signature_image}}"
+  },
+  "images": {
+    "company_logo": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+      "width_mm": 60,
+      "height_mm": 20
+    },
+    "signature_image": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ...",
+      "width_px": 150,
+      "height_px": 50
+    }
+  }
+}
+```
+
+**Image Specifications:**
+- **Format:** PNG only (Base64 encoded)
+- **Sizing:** Millimeters (preferred) or pixels  
+- **DPI Conversion:** 96px = 25.4mm
+- **Variable Names:** Must match between template and images object
+
+For comprehensive image documentation, see the **[Image Support Guide](image-support.md)**.
 
 ### Data Types
 
