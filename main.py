@@ -11,6 +11,7 @@ import json
 from typing import Dict, Any
 from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound
 from jinja2.exceptions import TemplateError
+from docx.opc.exceptions import PackageNotFoundError
 import logging
 
 # Configure logging
@@ -99,6 +100,16 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
             details={
                 "file": file_path,
                 "template_error": str(e)
+            }
+        )
+    elif isinstance(e, PackageNotFoundError):
+        return TemplateProcessingError(
+            message=f"Document format issue: The template file appears to be corrupted or incompatible. {str(e)}",
+            error_type="template_document_corruption",
+            details={
+                "file": file_path,
+                "docx_error": str(e),
+                "suggestion": "The template may have been generated incorrectly or corrupted. Try recreating the template with proper Jinja2 syntax in a standard Word document."
             }
         )
     else:
@@ -274,12 +285,18 @@ async def process_document_template(data: Json = Body(...), file: UploadFile = F
             logger.info("Template rendered successfully")
             
         except Exception as e:
-            # Clean up files
+            # Log the actual error for debugging
+            logger.error(f"Template rendering error: {type(e).__name__}: {str(e)}")
+            logger.error(f"Template rendering traceback: {traceback.format_exc()}")
+            
+            # Handle the template error first
+            template_error = handle_template_error(e, file.filename)
+            
+            # Clean up files after error handling
             for cleanup_path in [file_path]:
                 if cleanup_path and os.path.exists(cleanup_path):
                     os.remove(cleanup_path)
             
-            template_error = handle_template_error(e, file.filename)
             return create_error_response(template_error, 400)
         
         # Stage 4: Save Rendered Document
