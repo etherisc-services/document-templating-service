@@ -81,6 +81,9 @@ Complete setup instructions for all environments
 🔧 **[Usage Guide](docs/usage)**  
 Service usage with templating examples
 
+🖼️ **[Image Support Guide](docs/image-support)**  
+Include inline images in document templates
+
 🐳 **[Docker Integration Guide](docs/integration)**  
 Integrate with existing Docker Compose stacks
 
