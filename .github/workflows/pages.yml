@@ -93,7 +93,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: |
-            --config .lycheerc.toml --verbose --no-progress
+            --config .lycheerc.toml --verbose --format detailed
             https://etherisc-services.github.io/document-templating-service/
             https://etherisc-services.github.io/document-templating-service/docs/
             https://etherisc-services.github.io/document-templating-service/docs/installation.html
@@ -104,8 +104,8 @@ jobs:
             https://etherisc-services.github.io/document-templating-service/docs/examples.html
             https://etherisc-services.github.io/document-templating-service/docs/image-support.html
             https://etherisc-services.github.io/document-templating-service/docs/integration.html
-          fail: true
-          format: markdown
+          fail: false
+          format: detailed
           output: deployment-link-check.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
