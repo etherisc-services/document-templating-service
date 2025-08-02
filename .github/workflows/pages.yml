@@ -49,7 +49,7 @@ jobs:
       - name: Check internal links in built site
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,404,429,999 --exclude "_site/deployment-link-check.md" --exclude-file _site/ _site/
+          args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,404,429,999 _site/
           fail: false
           format: markdown
           output: build-time-link-check.md

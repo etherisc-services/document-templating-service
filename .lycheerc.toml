@@ -15,7 +15,6 @@ insecure = false
 accept = [200, 201, 204, 206, 301, 302, 303, 307, 308, 999]
 
 # Exclude URLs matching these patterns
-exclude_mail = true
 exclude = [
     # Local development URLs (all variations)
     "localhost",
