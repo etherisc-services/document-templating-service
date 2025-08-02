@@ -1,5 +1,3 @@
-# Lychee ignore patterns
-# Files to exclude from link checking
-deployment-link-check.md
-build-time-link-check.md
-test_image_files/*
+http://localhost:8000/
+https://etherisc-services.github.io/
+https://etherisc-services.github.io

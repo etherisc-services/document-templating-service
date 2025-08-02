@@ -15,21 +15,8 @@ insecure = false
 accept = [200, 201, 204, 206, 301, 302, 303, 307, 308, 999]
 
 # Exclude URLs matching these patterns
+# Note: Specific problematic URLs are listed in .lycheeignore
 exclude = [
-    # Local development URLs (all variations)
-    "localhost",
-    "127.0.0.1",
-    "0.0.0.0",
-    "http://localhost:8000",
-    "http://localhost:8000/",
-    "http://localhost:*",
-    "https://localhost:*",
-    
-    # Parent site (may not exist)
-    "https://etherisc-services.github.io",
-    "https://etherisc-services.github.io/",
-    "https://etherisc-services.github.io/$",
-    
     # Container registries (not browsable)
     "ghcr.io",
     "azurecr.io",
