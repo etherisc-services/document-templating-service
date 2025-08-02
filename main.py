@@ -112,6 +112,17 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
                 "suggestion": "The template may have been generated incorrectly or corrupted. Try recreating the template with proper Jinja2 syntax in a standard Word document."
             }
         )
+    elif isinstance(e, (TypeError, ValueError, ZeroDivisionError, ArithmeticError)):
+        return TemplateProcessingError(
+            message=f"Template runtime error: {str(e)}",
+            error_type="template_runtime_error",
+            details={
+                "file": file_path,
+                "runtime_error": str(e),
+                "error_class": type(e).__name__,
+                "suggestion": "Check that template variables have the correct data types and values"
+            }
+        )
     else:
         return TemplateProcessingError(
             message=f"Unknown template processing error: {str(e)}",
