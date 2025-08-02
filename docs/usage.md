@@ -607,8 +607,10 @@ When encountering template errors, follow these steps:
 
 2. **Validate Template Syntax:** Use proper Jinja2 syntax
    ```text
+   {% raw %}
    Correct: {% if items %}...{% endif %}
    Wrong:   {% if items %}...{% end %}
+   {% endraw %}
    ```
 
 3. **Check Data Types:** Ensure operations match data types
@@ -620,8 +622,10 @@ When encountering template errors, follow these steps:
 
 4. **Use Optional Variables:** Handle optional data gracefully
    ```text
+   {% raw %}
    Safe: {% if customer.email %}{{customer.email}}{% endif %}
    Risky: {{customer.email}} (fails if email is missing)
+   {% endraw %}
    ```
 
 #### Common Error Scenarios
@@ -635,9 +639,11 @@ When encountering template errors, follow these steps:
 
 ##### Invalid Template Syntax
 ```bash
+{% raw %}
 # Template contains unclosed tags: {% for item in items %}...
 # Missing: {% endfor %}
 # Error: "unexpected 'end of template'"
+{% endraw %}
 ```
 
 ##### Data Type Issues
