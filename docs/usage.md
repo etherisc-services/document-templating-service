@@ -76,10 +76,10 @@ The service supports two usage modes through a single unified endpoint:
 
 ## Documentation Sections
 
-### 📋 **[API Endpoints](api-endpoints.md)**
+### 📋 **[API Endpoints](api-endpoints.html)**
 Complete API reference with parameters, responses, and examples for all endpoints.
 
-### 📄 **[Document Templates](document-templates.md)**
+### 📄 **[Document Templates](document-templates.html)**
 Learn how to create Word templates with Jinja2 syntax, including:
 - Variable substitution
 - Conditional logic (if/else)
@@ -87,28 +87,28 @@ Learn how to create Word templates with Jinja2 syntax, including:
 - Advanced template patterns
 - Best practices and troubleshooting
 
-### 🖼️ **[Image Support](image-support.md)**
+### 🖼️ **[Image Support](image-support.html)**
 Comprehensive guide to including images in templates:
 - Base64 encoding for React applications
 - Size specifications and optimization
 - Template integration examples
 - Troubleshooting image issues
 
-### 🚫 **[Error Handling](error-handling.md)**
+### 🚫 **[Error Handling](error-handling.html)**
 Understanding and debugging errors:
 - HTTP status codes and error types
 - Structured error responses
 - Common issues and solutions
 - Debugging strategies
 
-### 💡 **[Examples](examples.md)**
+### 💡 **[Examples](examples.html)**
 Complete practical examples:
 - Invoice generation with complex data
 - React and Node.js integration code
 - Postman testing setup
 - Real-world use cases
 
-### 🐳 **[Integration Guide](integration.md)**
+### 🐳 **[Integration Guide](integration.html)**
 Docker Compose setup and integration patterns for existing applications.
 
 ## Base URL
@@ -163,16 +163,16 @@ Thank you for your business!
 
 ## Getting Started
 
-1. **📖 Start with [API Endpoints](api-endpoints.md)** to understand the available endpoints
-2. **📄 Learn [Document Templates](document-templates.md)** to create your first template
-3. **💡 Try [Examples](examples.md)** for complete working examples
-4. **🚫 Reference [Error Handling](error-handling.md)** when troubleshooting
-5. **🖼️ Add [Image Support](image-support.md)** for enhanced templates
-6. **🐳 Deploy with [Integration Guide](integration.md)** for production use
+1. **📖 Start with [API Endpoints](api-endpoints.html)** to understand the available endpoints
+2. **📄 Learn [Document Templates](document-templates.html)** to create your first template
+3. **💡 Try [Examples](examples.html)** for complete working examples
+4. **🚫 Reference [Error Handling](error-handling.html)** when troubleshooting
+5. **🖼️ Add [Image Support](image-support.html)** for enhanced templates
+6. **🐳 Deploy with [Integration Guide](integration.html)** for production use
 
 ## Need Help?
 
-- Check the **[Error Handling](error-handling.md)** guide for common issues
-- Try the **[Examples](examples.md)** for working code samples  
-- Review the **[Document Templates](document-templates.md)** guide for syntax help
-- Use the **[API Endpoints](api-endpoints.md)** reference for parameter details
+- Check the **[Error Handling](error-handling.html)** guide for common issues
+- Try the **[Examples](examples.html)** for working code samples  
+- Review the **[Document Templates](document-templates.html)** guide for syntax help
+- Use the **[API Endpoints](api-endpoints.html)** reference for parameter details

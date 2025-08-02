@@ -11,48 +11,48 @@ Welcome to the Document Template Processing Service documentation.
 
 ## Quick Start
 
-1. **[Installation](installation.md)** - Get the service running
-2. **[Usage Guide](usage.md)** - Quick start and overview
-3. **[API Endpoints](api-endpoints.md)** - Complete API reference
-4. **[Document Templates](document-templates.md)** - Create Jinja2 templates
-5. **[Examples](examples.md)** - Working code samples
+1. **[Installation](installation.html)** - Get the service running
+2. **[Usage Guide](usage.html)** - Quick start and overview
+3. **[API Endpoints](api-endpoints.html)** - Complete API reference
+4. **[Document Templates](document-templates.html)** - Create Jinja2 templates
+5. **[Examples](examples.html)** - Working code samples
 
 ## Comprehensive Guides
 
-### 🚀 **[Installation Guide](installation.md)**
+### 🚀 **[Installation Guide](installation.html)**
 Complete setup instructions from local development to production deployment.
 
-### 📋 **[Usage Guide](usage.md)**
+### 📋 **[Usage Guide](usage.html)**
 Quick start guide with essential concepts and links to detailed sections.
 
-### 🔌 **[API Endpoints](api-endpoints.md)**
+### 🔌 **[API Endpoints](api-endpoints.html)**
 Complete API reference with parameters, responses, and examples for all endpoints.
 
-### 📄 **[Document Templates](document-templates.md)**
+### 📄 **[Document Templates](document-templates.html)**
 Learn how to create Word templates with Jinja2 syntax:
 - Variable substitution and conditional logic
 - Loops and advanced template patterns
 - Best practices and troubleshooting
 
-### 🖼️ **[Image Support](image-support.md)**
+### 🖼️ **[Image Support](image-support.html)**
 Advanced image processing capabilities:
 - Base64 encoding for React applications
 - Size specifications and optimization
 - Template integration and troubleshooting
 
-### 🚫 **[Error Handling](error-handling.md)**
+### 🚫 **[Error Handling](error-handling.html)**
 Understanding and debugging errors:
 - HTTP status codes and error types
 - Structured error responses
 - Common issues and debugging strategies
 
-### 💡 **[Examples](examples.md)**
+### 💡 **[Examples](examples.html)**
 Complete practical examples:
 - Invoice generation with complex data
 - React, Node.js, and Python integration
 - Postman testing and real-world use cases
 
-### 🐳 **[Integration Guide](integration.md)**
+### 🐳 **[Integration Guide](integration.html)**
 Docker Compose setup and integration patterns for existing applications.
 
 ---
@@ -85,9 +85,9 @@ The service combines three powerful technologies:
 ## Support
 
 For questions and support:
-1. Check the **[Error Handling](error-handling.md)** guide
-2. Try the **[Examples](examples.md)** for working code
-3. Review the **[API Endpoints](api-endpoints.md)** reference
+1. Check the **[Error Handling](error-handling.html)** guide
+2. Try the **[Examples](examples.html)** for working code
+3. Review the **[API Endpoints](api-endpoints.html)** reference
 4. Create an issue in the GitHub repository
 
 ---

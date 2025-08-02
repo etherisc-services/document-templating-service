@@ -129,7 +129,7 @@ curl -X POST http://localhost:8000/api/v1/process-template-document \
   -o output.pdf
 ```
 
-For detailed image support documentation, see the **[Image Support Guide](image-support.md)**.
+For detailed image support documentation, see the **[Image Support Guide](image-support.html)**.
 
 ## Response Format
 

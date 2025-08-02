@@ -21,6 +21,12 @@ exclude = [
     "localhost",
     "127.0.0.1",
     "0.0.0.0",
+    "http://localhost:8000",
+    "http://localhost:*",
+    "https://localhost:*",
+    
+    # Parent site (may not exist)
+    "https://etherisc-services.github.io/$",
     
     # Container registries (not browsable)
     "ghcr.io",

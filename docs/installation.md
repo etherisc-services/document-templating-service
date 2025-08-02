@@ -145,7 +145,7 @@ After installation, verify everything is working:
    ```
 
 2. **Test with a sample document:**
-   See the [Usage Guide](usage.md) for examples.
+   See the [Usage Guide](usage.html) for examples.
 
 ## Troubleshooting
 
@@ -166,6 +166,6 @@ After installation, verify everything is working:
 
 ### Getting Help
 
-- Check the [Usage Guide](usage.md) for service usage examples
-- Review the main [README](../README.md)
+- Check the [Usage Guide](usage.html) for service usage examples
+- Review the main [README](../README.html)
 - Open an issue on the GitHub repository 

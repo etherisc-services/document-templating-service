@@ -194,7 +194,7 @@ Company Logo: {{company_logo}}
 }
 ```
 
-For detailed image support documentation, see the **[Image Support Guide](image-support.md)**.
+For detailed image support documentation, see the **[Image Support Guide](image-support.html)**.
 
 ## Data Types
 
@@ -250,4 +250,4 @@ Use online Jinja2 testers or create minimal test cases:
 }
 ```
 
-For comprehensive error handling, see the **[Error Handling](error-handling.md)** guide.
+For comprehensive error handling, see the **[Error Handling](error-handling.html)** guide.

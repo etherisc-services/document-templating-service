@@ -435,4 +435,4 @@ If you encounter errors not covered in this guide:
 4. **Review the API documentation** for correct usage patterns
 5. **Check Gotenberg service status** if PDF conversion fails
 
-For image-specific errors, see the **[Image Support Guide](image-support.md)** troubleshooting section.
+For image-specific errors, see the **[Image Support Guide](image-support.html)** troubleshooting section.

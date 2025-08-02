@@ -687,12 +687,12 @@ main().catch(console.error);
 
 ## Additional Resources
 
-- **[Installation Guide](installation.md)** - Setup and deployment
-- **[API Endpoints](api-endpoints.md)** - Complete API reference
-- **[Document Templates](document-templates.md)** - Template creation guide
-- **[Image Support](image-support.md)** - Advanced image features
-- **[Error Handling](error-handling.md)** - Debugging and troubleshooting
-- **[Integration Guide](integration.md)** - Docker Compose integration
+- **[Installation Guide](installation.html)** - Setup and deployment
+- **[API Endpoints](api-endpoints.html)** - Complete API reference
+- **[Document Templates](document-templates.html)** - Template creation guide
+- **[Image Support](image-support.html)** - Advanced image features
+- **[Error Handling](error-handling.html)** - Debugging and troubleshooting
+- **[Integration Guide](integration.html)** - Docker Compose integration
 
 ### External Resources
 

@@ -50,7 +50,7 @@ jobs:
         uses: lycheeverse/lychee-action@v2
         with:
           args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,429 --base _site _site/
-          fail: false
+          fail: true
           format: markdown
           output: build-time-link-check.md
         env:

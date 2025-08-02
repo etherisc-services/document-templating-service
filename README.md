@@ -30,10 +30,10 @@ docker compose up -d
 
 ## 📖 Documentation
 
-- **[📋 Installation Guide](docs/installation.md)** - Complete setup instructions  
-- **[🔧 Usage Guide](docs/usage.md)** - Service usage and templating examples
-- **[🖼️ Image Support Guide](docs/image-support.md)** - Include inline images in templates
-- **[🐳 Docker Integration Guide](docs/integration.md)** - Integrate with existing Docker Compose stacks
+- **[📋 Installation Guide](docs/installation.html)** - Complete setup instructions  
+- **[🔧 Usage Guide](docs/usage.html)** - Service usage and templating examples
+- **[🖼️ Image Support Guide](docs/image-support.html)** - Include inline images in templates
+- **[🐳 Docker Integration Guide](docs/integration.html)** - Integrate with existing Docker Compose stacks
 
 ## 🛠️ Technology Stack
 
