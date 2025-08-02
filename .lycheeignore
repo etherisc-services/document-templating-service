@@ -1,3 +1,4 @@
-http://localhost:8000/
-https://etherisc-services.github.io/
-https://etherisc-services.github.io
+localhost:*
+localhost:8000
+http://localhost:*
+https://etherisc-services\.github\.io
