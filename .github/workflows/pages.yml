@@ -94,6 +94,8 @@ jobs:
         with:
           args: |
             --config .lycheerc.toml --verbose --no-progress
+            --exclude "http://localhost:8000/" 
+            --exclude "https://etherisc-services.github.io/"
             https://etherisc-services.github.io/document-templating-service/
             https://etherisc-services.github.io/document-templating-service/docs/
             https://etherisc-services.github.io/document-templating-service/docs/installation.html

@@ -18,15 +18,15 @@ accept = [200, 201, 204, 206, 301, 302, 303, 307, 308, 999]
 exclude = [
     # Local development URLs (all variations)
     "localhost",
-    "127.0.0.1",
+    "127.0.0.1", 
     "0.0.0.0",
-    "localhost:*",
-    "http://localhost*",
-    "https://localhost*",
+    "^http://localhost.*",
+    "^https://localhost.*",
+    ".*localhost.*",
     
     # Parent site (may not exist) 
-    "https://etherisc-services.github.io/$",
-    "https://etherisc-services.github.io/",
+    "^https://etherisc-services.github.io/$",
+    "^https://etherisc-services.github.io/",
     
     # Container registries (not browsable)
     "ghcr.io",
