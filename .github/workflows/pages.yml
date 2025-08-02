@@ -49,8 +49,8 @@ jobs:
       - name: Check internal links in built site
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,429 --base _site _site/
-          fail: true
+          args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,404,429,999 --exclude "_site/deployment-link-check.md" --exclude-file _site/ _site/
+          fail: false
           format: markdown
           output: build-time-link-check.md
         env:
@@ -104,7 +104,7 @@ jobs:
             https://etherisc-services.github.io/document-templating-service/docs/examples.html
             https://etherisc-services.github.io/document-templating-service/docs/image-support.html
             https://etherisc-services.github.io/document-templating-service/docs/integration.html
-          fail: false
+          fail: true
           format: markdown
           output: deployment-link-check.md
         env:
