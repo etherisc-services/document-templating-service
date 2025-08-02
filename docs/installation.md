@@ -167,5 +167,5 @@ After installation, verify everything is working:
 ### Getting Help
 
 - Check the [Usage Guide](usage.html) for service usage examples
-- Review the main [README](../README.html)
+- Review the main [README](../)
 - Open an issue on the GitHub repository 
