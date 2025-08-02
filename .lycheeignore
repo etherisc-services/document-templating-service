@@ -1,4 +1,2 @@
-localhost:*
-localhost:8000
-http://localhost:*
-https://etherisc-services\.github\.io
+^http://localhost:8000/?.*
+^https://etherisc-services\.github\.io/?$
