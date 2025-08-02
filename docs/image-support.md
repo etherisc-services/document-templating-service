@@ -461,4 +461,4 @@ Request: "images": { "company_logo": { ... } }  ✅
 3. **Test Incrementally**: Start with simple templates and single images
 4. **Use Browser DevTools**: Monitor network requests and responses
 
-For additional support, refer to the [main usage guide](usage.html) and [error handling documentation](usage.md#error-handling-and-troubleshooting).
+For additional support, refer to the [main usage guide](usage.html) and [error handling documentation](error-handling.html).
