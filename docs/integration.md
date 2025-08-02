@@ -394,7 +394,7 @@ async function processDocumentWithImages(templatePath, templateData, imagePaths)
 
   try {
     const response = await axios.post(
-      'http://document-templating:8000/api/v1/process-template-document-with-images',
+      'http://document-templating:8000/api/v1/process-template-document',
       form,
       {
         headers: form.getHeaders(),
@@ -418,7 +418,7 @@ import json
 import base64
 
 def process_document_with_images(template_path, template_data, image_paths):
-    url = "http://document-templating:8000/api/v1/process-template-document-with-images"
+    url = "http://document-templating:8000/api/v1/process-template-document"
     
     # Convert images to base64
     images = {}

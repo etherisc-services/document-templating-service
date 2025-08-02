@@ -173,7 +173,7 @@ def test_image_endpoint():
             
             print("📤 Sending request to image-enhanced endpoint...")
             response = requests.post(
-                f"{BASE_URL}/api/v1/process-template-document-with-images",
+                f"{BASE_URL}/api/v1/process-template-document",
                 files=files,
                 data=data,
                 timeout=60

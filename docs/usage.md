@@ -46,29 +46,41 @@ Alternative health check endpoint.
 
 **POST** `/api/v1/process-template-document`
 
-Main endpoint for processing Word templates into PDFs (without image support).
+Unified endpoint for processing Word templates into PDFs with optional image support.
+
+**Supports two usage modes:**
+
+#### Legacy Mode (Simple Templates)
+Use the `data` parameter for templates without images:
 
 **Parameters:**
 - `file` (required): Word document template (.docx file)
 - `data` (required): JSON object containing template variables
 
-**Content-Type:** `multipart/form-data`
-
-**Response:** PDF file download
-
-### Process Template Document with Images
-
-**POST** `/api/v1/process-template-document-with-images`
-
-Enhanced endpoint for processing Word templates with inline image support.
+#### Enhanced Mode (Templates with Images) 
+Use the `request_data` parameter for templates with inline images:
 
 **Parameters:**
 - `file` (required): Word document template (.docx file)
-- `request_data` (required): JSON string containing template_data and optional images
+- `request_data` (required): JSON string containing template_data and images
 
 **Content-Type:** `multipart/form-data`
 
 **Response:** PDF file download
+
+### Legacy Mode Example
+
+**Simple templates without images:**
+```bash
+curl -X POST http://localhost:8000/api/v1/process-template-document \
+  -F "file=@template.docx" \
+  -F "data={\"customer_name\":\"John Doe\",\"amount\":150.00}" \
+  -o result.pdf
+```
+
+### Enhanced Mode Example
+
+**Templates with inline images:**
 
 **Request Data Structure:**
 ```json
@@ -87,7 +99,7 @@ Enhanced endpoint for processing Word templates with inline image support.
 }
 ```
 
-**Example with curl:**
+**cURL Example:**
 ```bash
 # Encode image to base64
 IMAGE_BASE64=$(base64 -w 0 logo.png)
@@ -108,7 +120,7 @@ REQUEST_DATA='{
 }'
 
 # Submit request
-curl -X POST http://localhost:8000/api/v1/process-template-document-with-images \
+curl -X POST http://localhost:8000/api/v1/process-template-document \
   -F "file=@template.docx" \
   -F "request_data=$REQUEST_DATA" \
   -o output.pdf
@@ -116,7 +128,7 @@ curl -X POST http://localhost:8000/api/v1/process-template-document-with-images 
 
 For detailed image support documentation, see the **[Image Support Guide](image-support.md)**.
 
-**Original Endpoint Example:**
+**Legacy Mode Example (Backward Compatible):**
 ```bash
 curl -X POST \
   http://localhost:8000/api/v1/process-template-document \
@@ -334,7 +346,7 @@ Due Date: {{due_date|date_format('%m/%d/%Y')}}
 
 ### Image Support in Templates
 
-🎯 **Available in:** `/api/v1/process-template-document-with-images` endpoint only
+🎯 **Available in:** `/api/v1/process-template-document` endpoint (Enhanced Mode with `request_data` parameter)
 
 Images can be embedded directly in templates using the enhanced endpoint. Images are provided as Base64-encoded PNG data and referenced in templates using standard Jinja2 variable syntax.
 

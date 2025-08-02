@@ -21,14 +21,16 @@ Based on the [docxtpl inline image documentation](https://docxtpl.readthedocs.io
 
 ## API Endpoint
 
-### Enhanced Endpoint: `/api/v1/process-template-document-with-images`
+### Unified Endpoint: `/api/v1/process-template-document`
 
 **Method:** `POST`  
 **Content-Type:** `multipart/form-data`
 
-**Parameters:**
+**Enhanced Mode Parameters:**
 - `file`: Word document template (.docx file)
 - `request_data`: JSON string containing template data and images
+
+**Note:** This is the same endpoint used for simple templates (without images) via the `data` parameter. The endpoint automatically detects which mode to use based on the parameters provided.
 
 ## Request Format
 
@@ -158,7 +160,7 @@ const DocumentProcessor = () => {
       formData.append('request_data', JSON.stringify(requestData));
 
       // Submit request
-      const response = await fetch('/api/v1/process-template-document-with-images', {
+      const response = await fetch('/api/v1/process-template-document', {
         method: 'POST',
         body: formData
       });
@@ -237,7 +239,7 @@ export const useDocumentProcessor = () => {
       formData.append('file', templateFile);
       formData.append('request_data', JSON.stringify(requestData));
 
-      const response = await fetch('/api/v1/process-template-document-with-images', {
+      const response = await fetch('/api/v1/process-template-document', {
         method: 'POST',
         body: formData
       });
@@ -308,7 +310,7 @@ REQUEST_DATA='{
 }'
 
 # Submit request
-curl -X POST http://localhost:8000/api/v1/process-template-document-with-images \
+curl -X POST http://localhost:8000/api/v1/process-template-document \
   -F "file=@template.docx" \
   -F "request_data=$REQUEST_DATA" \
   -o output.pdf
@@ -341,7 +343,7 @@ REQUEST_DATA='{
   }
 }'
 
-curl -X POST http://localhost:8000/api/v1/process-template-document-with-images \
+curl -X POST http://localhost:8000/api/v1/process-template-document \
   -F "file=@invoice_template.docx" \
   -F "request_data=$REQUEST_DATA" \
   -o invoice_with_images.pdf
@@ -396,17 +398,24 @@ curl -X POST http://localhost:8000/api/v1/process-template-document-with-images 
 3. **File Validation**: Validate file types before upload
 4. **Memory Management**: Handle large base64 strings carefully
 
-## Backward Compatibility
+## Unified Endpoint Design
 
-The original endpoint `/api/v1/process-template-document` remains available for:
+The `/api/v1/process-template-document` endpoint now supports both modes:
+
+### Legacy Mode (Backward Compatible)
+Use the `data` parameter for:
 - Templates without images
-- Existing integrations
+- Existing integrations  
 - Simple use cases
+- Maintaining existing code without changes
 
-Use the new endpoint `/api/v1/process-template-document-with-images` when:
+### Enhanced Mode
+Use the `request_data` parameter when:
 - Templates include images
-- Enhanced error handling is needed
-- React integration with complex data structures
+- You need structured error handling
+- Building React applications with complex data structures
+
+**Smart Detection:** The endpoint automatically detects which mode to use based on the parameters provided, ensuring seamless operation.
 
 ## Troubleshooting
 
