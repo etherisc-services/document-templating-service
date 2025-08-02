@@ -46,6 +46,24 @@ jobs:
         env:
           JEKYLL_ENV: production
 
+      - name: Check internal links in built site
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --config .lycheerc.toml --verbose --no-progress --accept 200,301,302,403,429 --base _site _site/
+          fail: false
+          format: markdown
+          output: build-time-link-check.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload build-time link check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-time-link-check
+          path: build-time-link-check.md
+          retention-days: 7
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
 
@@ -71,30 +89,48 @@ jobs:
       - name: Wait for deployment
         run: sleep 30
 
-      - name: Check links with Lychee
+      - name: Check all documentation links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --config .lycheerc.toml --verbose --no-progress https://etherisc-services.github.io/document-templating-service/
+          args: |
+            --config .lycheerc.toml --verbose --no-progress
+            https://etherisc-services.github.io/document-templating-service/
+            https://etherisc-services.github.io/document-templating-service/docs/
+            https://etherisc-services.github.io/document-templating-service/docs/installation.html
+            https://etherisc-services.github.io/document-templating-service/docs/usage.html
+            https://etherisc-services.github.io/document-templating-service/docs/api-endpoints.html
+            https://etherisc-services.github.io/document-templating-service/docs/document-templates.html
+            https://etherisc-services.github.io/document-templating-service/docs/error-handling.html
+            https://etherisc-services.github.io/document-templating-service/docs/examples.html
+            https://etherisc-services.github.io/document-templating-service/docs/image-support.html
+            https://etherisc-services.github.io/document-templating-service/docs/integration.html
           fail: false
           format: markdown
-          output: lychee-report.md
+          output: deployment-link-check.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload link check report
+      - name: Upload deployment link check report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: link-check-report
-          path: lychee-report.md
+          name: deployment-link-check
+          path: deployment-link-check.md
           retention-days: 7
 
       - name: Link check summary
         if: always()
         run: |
-          echo "🔗 Link check completed!"
-          echo "📄 Check the uploaded artifact 'link-check-report' for detailed results."
-          if [ -f lychee-report.md ]; then
-            echo "📊 Summary:"
-            grep -E "🔍 Total|✅ Successful|🚫 Errors" lychee-report.md || echo "Report summary not available"
+          echo "🔗 Comprehensive link check completed!"
+          echo "📄 Build-time check: 'build-time-link-check' artifact"
+          echo "📄 Deployment check: 'deployment-link-check' artifact"
+          echo ""
+          echo "📊 Build-time Summary:"
+          if [ -f build-time-link-check.md ]; then
+            grep -E "🔍 Total|✅ Successful|🚫 Errors" build-time-link-check.md || echo "Build-time report not found"
+          fi
+          echo ""
+          echo "📊 Deployment Summary:"
+          if [ -f deployment-link-check.md ]; then
+            grep -E "🔍 Total|✅ Successful|🚫 Errors" deployment-link-check.md || echo "Deployment report summary not available"
           fi 
