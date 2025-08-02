@@ -175,7 +175,7 @@ All errors return a structured JSON response:
     "file": "template.docx",
     "syntax_error": "unexpected 'end of template'",
     "line": 15,
-    "suggestion": "Check template for missing {% endif %} or {% endfor %} tags"
+    "suggestion": "Check template for missing {% raw %}{% endif %}{% endraw %} or {% raw %}{% endfor %}{% endraw %} tags"
   }
 }
 ```
