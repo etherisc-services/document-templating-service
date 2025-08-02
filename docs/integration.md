@@ -360,6 +360,94 @@ def process_document(template_path, data):
             raise Exception(f"Document processing failed: {response.text}")
 ```
 
+### Processing Templates with Images
+
+For templates that include images, use the enhanced endpoint:
+
+#### Node.js with Images
+
+```javascript
+const axios = require('axios');
+const fs = require('fs');
+
+async function processDocumentWithImages(templatePath, templateData, imagePaths) {
+  // Convert images to base64
+  const images = {};
+  for (const [name, path] of Object.entries(imagePaths)) {
+    const imageBuffer = fs.readFileSync(path);
+    const base64Data = imageBuffer.toString('base64');
+    images[name] = {
+      data: base64Data,
+      width_mm: 50,  // Adjust as needed
+      height_mm: 20
+    };
+  }
+
+  const requestData = {
+    template_data: templateData,
+    images: images
+  };
+
+  const form = new FormData();
+  form.append('file', fs.createReadStream(templatePath));
+  form.append('request_data', JSON.stringify(requestData));
+
+  try {
+    const response = await axios.post(
+      'http://document-templating:8000/api/v1/process-template-document-with-images',
+      form,
+      {
+        headers: form.getHeaders(),
+        responseType: 'stream'
+      }
+    );
+    
+    return response.data; // PDF stream
+  } catch (error) {
+    console.error('Document processing with images failed:', error);
+    throw error;
+  }
+}
+```
+
+#### Python with Images
+
+```python
+import requests
+import json
+import base64
+
+def process_document_with_images(template_path, template_data, image_paths):
+    url = "http://document-templating:8000/api/v1/process-template-document-with-images"
+    
+    # Convert images to base64
+    images = {}
+    for name, path in image_paths.items():
+        with open(path, 'rb') as img_file:
+            base64_data = base64.b64encode(img_file.read()).decode('utf-8')
+            images[name] = {
+                'data': base64_data,
+                'width_mm': 50,  # Adjust as needed
+                'height_mm': 20
+            }
+    
+    request_data = {
+        'template_data': template_data,
+        'images': images
+    }
+    
+    with open(template_path, 'rb') as template_file:
+        files = {'file': template_file}
+        data_payload = {'request_data': json.dumps(request_data)}
+        
+        response = requests.post(url, files=files, data=data_payload)
+        
+        if response.status_code == 200:
+            return response.content  # PDF bytes
+        else:
+            raise Exception(f"Document processing failed: {response.text}")
+```
+
 ## Monitoring and Logging
 
 ### Health Checks
