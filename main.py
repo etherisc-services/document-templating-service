@@ -12,7 +12,7 @@ import json
 import base64
 import tempfile
 from typing import Dict, Any, Optional
-from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound, StrictUndefined
+from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound, StrictUndefined, Undefined
 from jinja2.exceptions import TemplateError
 from docx.opc.exceptions import PackageNotFoundError
 import logging
@@ -40,6 +40,68 @@ def convert_dict_to_object(data):
         return [convert_dict_to_object(item) for item in data]
     else:
         return data
+
+# Custom Undefined classes for graceful variable handling
+class SilentUndefined(Undefined):
+    """
+    An undefined that silently ignores missing variables by rendering as empty string.
+    This allows templates to be more forgiving of missing data.
+    """
+    def __str__(self):
+        return ''
+    
+    def __unicode__(self):
+        return u''
+    
+    def __bool__(self):
+        return False
+    
+    def __nonzero__(self):  # Python 2 compatibility
+        return False
+    
+    def __getattr__(self, name):
+        return self._undefined(name=name)
+    
+    def __getitem__(self, name):
+        return self._undefined(name=name)
+
+
+class DebugUndefined(Undefined):
+    """
+    An undefined that outputs a clear message showing the missing variable name.
+    This helps identify which variables are missing in the template.
+    """
+    def __str__(self):
+        if self._undefined_name:
+            return '[Missing variable: %s]' % self._undefined_name
+        return '[Missing variable: undefined]'
+    
+    def __unicode__(self):
+        if self._undefined_name:
+            return u'[Missing variable: %s]' % self._undefined_name
+        return u'[Missing variable: undefined]'
+    
+    def __bool__(self):
+        return False
+    
+    def __nonzero__(self):  # Python 2 compatibility
+        return False
+    
+    def __getattr__(self, name):
+        # For nested attributes, show the full path
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}.{name}"
+        else:
+            full_name = name
+        return self._undefined(name=full_name)
+    
+    def __getitem__(self, name):
+        # For dictionary access, show the full path
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}[{name}]"
+        else:
+            full_name = f"[{name}]"
+        return self._undefined(name=full_name)
 
 # Custom exception classes for structured error handling
 class DocumentProcessingError(Exception):
@@ -503,11 +565,24 @@ async def process_document_template(
         
         # Stage 3: Template Rendering with Data Injection
         try:
-            # Create custom Jinja2 environment with StrictUndefined for better error handling
+            # Create custom Jinja2 environment with configurable undefined behavior
             from jinja2 import Environment
             
-            # Configure docxtpl to use StrictUndefined for better error messages
-            jinja_env = Environment(undefined=StrictUndefined)
+            # Choose undefined behavior based on environment variable
+            # Options: "strict" (default), "silent", "debug"
+            undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "silent").lower()
+            
+            if undefined_behavior == "debug":
+                undefined_class = DebugUndefined
+                logger.info("Using DebugUndefined - missing variables will show as [Missing variable: name]")
+            elif undefined_behavior == "silent":
+                undefined_class = SilentUndefined
+                logger.info("Using SilentUndefined - missing variables will be empty")
+            else:  # "strict" or any other value
+                undefined_class = StrictUndefined
+                logger.info("Using StrictUndefined - missing variables will raise errors")
+            
+            jinja_env = Environment(undefined=undefined_class)
             
             # Render template with context data (includes images if provided)
             document.render(context_data_with_objects, jinja_env)
