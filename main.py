@@ -12,7 +12,7 @@ import json
 import base64
 import tempfile
 from typing import Dict, Any, Optional
-from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound
+from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound, StrictUndefined
 from jinja2.exceptions import TemplateError
 from docx.opc.exceptions import PackageNotFoundError
 import logging
@@ -20,6 +20,26 @@ import logging
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Utility class to convert dictionaries to objects with dot notation
+class DictToObject:
+    """Convert dictionary to object with dot notation access"""
+    def __init__(self, dictionary):
+        for key, value in dictionary.items():
+            if isinstance(value, dict):
+                value = DictToObject(value)
+            elif isinstance(value, list):
+                value = [DictToObject(item) if isinstance(item, dict) else item for item in value]
+            setattr(self, key, value)
+
+def convert_dict_to_object(data):
+    """Recursively convert dictionaries to objects for dot notation access"""
+    if isinstance(data, dict):
+        return DictToObject(data)
+    elif isinstance(data, list):
+        return [convert_dict_to_object(item) for item in data]
+    else:
+        return data
 
 # Custom exception classes for structured error handling
 class DocumentProcessingError(Exception):
@@ -85,13 +105,24 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
             }
         )
     elif isinstance(e, UndefinedError):
+        error_message = str(e)
+        suggestion = "Check your template variables match the provided data"
+        
+        # Handle specific case of accessing attributes on dict objects
+        if "dict object" in error_message and "has no attribute" in error_message:
+            # Extract the attribute name from the error message
+            parts = error_message.split("has no attribute")
+            if len(parts) > 1:
+                attr_name = parts[1].strip().strip("'\"")
+                suggestion = f"The template is trying to access '.{attr_name}' on a dictionary. Use bracket notation like {{{{data['{attr_name}']}}}} instead of {{{{data.{attr_name}}}}} or ensure your data structure provides objects with attributes rather than dictionaries."
+        
         return TemplateProcessingError(
-            message=f"Undefined variable in template: {str(e)}",
+            message=f"Undefined variable in template: {error_message}",
             error_type="undefined_variable",
             details={
                 "file": file_path,
-                "undefined_variable": str(e),
-                "suggestion": "Check your template variables match the provided data"
+                "undefined_variable": error_message,
+                "suggestion": suggestion
             }
         )
     elif isinstance(e, TemplateRuntimeError):
@@ -453,6 +484,14 @@ async def process_document_template(
                 context_data = template_data
                 logger.info(f"Legacy mode: Context prepared with {len(context_data)} variables")
             
+            # Convert dictionary values to objects for dot notation access
+            # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
+            context_data_with_objects = {}
+            for key, value in context_data.items():
+                context_data_with_objects[key] = convert_dict_to_object(value)
+            
+            logger.info("Context data prepared with dot notation support")
+            
         except Exception as e:
             # Clean up uploaded file
             if os.path.exists(file_path):
@@ -464,8 +503,14 @@ async def process_document_template(
         
         # Stage 3: Template Rendering with Data Injection
         try:
+            # Create custom Jinja2 environment with StrictUndefined for better error handling
+            from jinja2 import Environment
+            
+            # Configure docxtpl to use StrictUndefined for better error messages
+            jinja_env = Environment(undefined=StrictUndefined)
+            
             # Render template with context data (includes images if provided)
-            document.render(context_data)
+            document.render(context_data_with_objects, jinja_env)
             logger.info("Template rendered successfully")
             
         except Exception as e:

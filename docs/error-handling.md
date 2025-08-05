@@ -180,21 +180,43 @@ All errors return a structured JSON response:
 }
 ```
 
-#### template_undefined_error
-**Cause:** Template references undefined variable  
+#### undefined_variable
+**Cause:** Template references undefined variable or tries to access attributes on dictionary objects  
 **Status:** 400
 
+**Basic undefined variable:**
 ```json
 {
-  "message": "Template error in template.docx: 'customer_namme' is undefined",
-  "error_type": "template_undefined_error",
+  "message": "Undefined variable in template: 'customer_namme' is undefined",
+  "error_type": "undefined_variable",
   "details": {
     "file": "template.docx",
-    "undefined_variable": "customer_namme",
-    "suggestion": "Ensure all template variables are provided in the data or check for typos"
+    "undefined_variable": "'customer_namme' is undefined",
+    "suggestion": "Check your template variables match the provided data"
   }
 }
 ```
+
+**Dictionary attribute access error (improved in v1.2+):**
+```json
+{
+  "message": "Undefined variable in template: 'dict object' has no attribute 'organization'",
+  "error_type": "undefined_variable",
+  "details": {
+    "file": "template.docx",
+    "undefined_variable": "'dict object' has no attribute 'organization'",
+    "suggestion": "The template is trying to access '.organization' on a dictionary. Use bracket notation like {{data['organization']}} instead of {{data.organization}} or ensure your data structure provides objects with attributes rather than dictionaries."
+  }
+}
+```
+
+**Common Solutions:**
+- Check for typos in variable names
+- Ensure all referenced fields exist in your data
+- For nested data access, use either:
+  - Object notation: `{{customer.name}}` (requires object structure)
+  - Bracket notation: `{{customer['name']}}` (works with dictionaries)
+- Use default filters for optional fields: `{{optional_field|default('N/A')}}`
 
 #### template_runtime_error
 **Cause:** Runtime errors during template processing (type errors, division by zero, etc.)  

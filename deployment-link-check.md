@@ -19,4 +19,4 @@
 ### Errors in https://etherisc-services.github.io/document-templating-service/docs/
 
 * [404] [https://etherisc-services.github.io/](https://etherisc-services.github.io/) | Network error: Not Found
-[Full Github Actions output](https://github.com/etherisc-services/document-templating-service/actions/runs/16695776137?check_suite_focus=true)
+[Full Github Actions output](https://github.com/etherisc-services/document-templating-service/actions/runs/16696294216?check_suite_focus=true)
