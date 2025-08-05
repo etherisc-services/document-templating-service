@@ -569,8 +569,8 @@ async def process_document_template(
             from jinja2 import Environment
             
             # Choose undefined behavior based on environment variable
-            # Options: "strict" (default), "silent", "debug"
-            undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "silent").lower()
+            # Options: "debug" (default), "silent", "strict"
+            undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "debug").lower()
             
             if undefined_behavior == "debug":
                 undefined_class = DebugUndefined
