@@ -139,6 +139,7 @@ class TemplateRequest(BaseModel):
     """Model for the complete template processing request"""
     template_data: Dict[str, Any]  # The data to inject into the template
     images: Optional[Dict[str, ImageData]] = None  # Optional images referenced in template
+    undefined_behavior: Optional[str] = None  # Override undefined variable behavior: "debug", "silent", "strict"
 
 def create_error_response(error: DocumentProcessingError, status_code: int = 500) -> JSONResponse:
     """Create a structured error response"""
@@ -422,6 +423,7 @@ async def process_document_template(
                 request_obj = TemplateRequest(**parsed_request)
                 template_data = request_obj.template_data
                 images_data = request_obj.images
+                api_undefined_behavior = request_obj.undefined_behavior
                 logger.info(f"Enhanced mode: Processing with {len(template_data)} data keys and {len(images_data or {})} images")
             except json.JSONDecodeError as e:
                 error = TemplateProcessingError(
@@ -447,6 +449,7 @@ async def process_document_template(
             # Legacy mode: simple data parameter
             template_data = data
             images_data = None
+            api_undefined_behavior = None
             logger.info(f"Legacy mode: Processing with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data")
         else:
             # No data provided at all
@@ -568,9 +571,14 @@ async def process_document_template(
             # Create custom Jinja2 environment with configurable undefined behavior
             from jinja2 import Environment
             
-            # Choose undefined behavior based on environment variable
+            # Choose undefined behavior: API parameter overrides environment variable
             # Options: "debug" (default), "silent", "strict"
-            undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "debug").lower()
+            if api_undefined_behavior is not None:
+                undefined_behavior = api_undefined_behavior.lower()
+                logger.info(f"Using API-specified undefined behavior: {undefined_behavior}")
+            else:
+                undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "debug").lower()
+                logger.info(f"Using environment-specified undefined behavior: {undefined_behavior}")
             
             if undefined_behavior == "debug":
                 undefined_class = DebugUndefined
