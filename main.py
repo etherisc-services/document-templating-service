@@ -23,14 +23,51 @@ logger = logging.getLogger(__name__)
 
 # Utility class to convert dictionaries to objects with dot notation
 class DictToObject:
-    """Convert dictionary to object with dot notation access"""
+    """Convert dictionary to object with dot notation access while preserving dict methods"""
     def __init__(self, dictionary):
+        # Store original dictionary for dict methods
+        self._original_dict = dictionary.copy()
+        
         for key, value in dictionary.items():
             if isinstance(value, dict):
                 value = DictToObject(value)
             elif isinstance(value, list):
                 value = [DictToObject(item) if isinstance(item, dict) else item for item in value]
             setattr(self, key, value)
+    
+    def items(self):
+        """Return items like a dictionary"""
+        return self._original_dict.items()
+    
+    def keys(self):
+        """Return keys like a dictionary"""
+        return self._original_dict.keys()
+    
+    def values(self):
+        """Return values like a dictionary (but converted to objects)"""
+        return [getattr(self, key) for key in self._original_dict.keys()]
+    
+    def get(self, key, default=None):
+        """Get value like a dictionary"""
+        return getattr(self, key, default)
+    
+    def __getitem__(self, key):
+        """Support dict[key] syntax"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(key)
+    
+    def __contains__(self, key):
+        """Support 'key in dict' syntax"""
+        return hasattr(self, key)
+    
+    def __len__(self):
+        """Support len(dict) syntax"""
+        return len(self._original_dict)
+    
+    def __iter__(self):
+        """Support iteration over keys"""
+        return iter(self._original_dict.keys())
 
 def convert_dict_to_object(data):
     """Recursively convert dictionaries to objects for dot notation access"""
