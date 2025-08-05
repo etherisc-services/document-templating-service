@@ -577,7 +577,7 @@ async def process_document_template(
                 undefined_behavior = api_undefined_behavior.lower()
                 logger.info(f"Using API-specified undefined behavior: {undefined_behavior}")
             else:
-                undefined_behavior = get_env("UNDEFINED_BEHAVIOR", "debug").lower()
+                undefined_behavior = os.environ.get("UNDEFINED_BEHAVIOR", "debug").lower()
                 logger.info(f"Using environment-specified undefined behavior: {undefined_behavior}")
             
             if undefined_behavior == "debug":
