@@ -60,10 +60,10 @@ class SilentUndefined(Undefined):
         return False
     
     def __getattr__(self, name):
-        return self._undefined(name=name)
+        return self.__class__(name=name)
     
     def __getitem__(self, name):
-        return self._undefined(name=name)
+        return self.__class__(name=name)
 
 
 class DebugUndefined(Undefined):
@@ -93,7 +93,7 @@ class DebugUndefined(Undefined):
             full_name = f"{self._undefined_name}.{name}"
         else:
             full_name = name
-        return self._undefined(name=full_name)
+        return self.__class__(name=full_name)
     
     def __getitem__(self, name):
         # For dictionary access, show the full path
@@ -101,7 +101,7 @@ class DebugUndefined(Undefined):
             full_name = f"{self._undefined_name}[{name}]"
         else:
             full_name = f"[{name}]"
-        return self._undefined(name=full_name)
+        return self.__class__(name=full_name)
 
 # Custom exception classes for structured error handling
 class DocumentProcessingError(Exception):
