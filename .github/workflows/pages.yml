@@ -105,8 +105,7 @@ jobs:
             https://etherisc-services.github.io/document-templating-service/docs/image-support.html
             https://etherisc-services.github.io/document-templating-service/docs/integration.html
           fail: true
-          format: markdown
-          output: deployment-link-check.md
+          format: markdown          output: deployment-link-check.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -1,0 +1,64 @@
+{
+  "name": "Document Template Processing Service",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.flake8",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ms-toolsai.jupyter",
+        "ms-vscode.vscode-json",
+        "bradlc.vscode-tailwindcss",
+        "formulahendry.auto-rename-tag",
+        "ms-vscode.live-server",
+        "ms-vscode-remote.remote-containers"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.flake8Enabled": true,
+        "python.formatting.provider": "black",
+        "python.formatting.blackArgs": ["--line-length=88"],
+        "python.sortImports.args": ["--profile", "black"],
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["-v"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        }
+      }
+    }
+  },
+  "postCreateCommand": "pip install -r requirements.txt && pip install -r requirements-test.txt",
+  "forwardPorts": [8000, 8080, 3000],
+  "portsAttributes": {
+    "8000": {
+      "label": "FastAPI Service",
+      "onAutoForward": "openPreview"
+    },
+    "8080": {
+      "label": "Gotenberg PDF Service",
+      "onAutoForward": "ignore"
+    },
+    "3000": {
+      "label": "Documentation Server", 
+      "onAutoForward": "ignore"
+    }
+  },
+  "containerEnv": {
+    "GOTENBERG_API_URL": "http://gotenberg:3000",
+    "UNDEFINED_BEHAVIOR": "debug"
+  },
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  "remoteUser": "vscode",
+  "workspaceFolder": "/workspace",
+  "onCreateCommand": "mkdir -p temp && chmod 755 temp"
+}

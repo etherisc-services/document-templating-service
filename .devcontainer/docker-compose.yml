@@ -1,0 +1,32 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    networks:
+      - dev-network
+    environment:
+      - GOTENBERG_API_URL=http://gotenberg:3000
+      - UNDEFINED_BEHAVIOR=debug
+    depends_on:
+      - gotenberg
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    ports:
+      - "3001:3000"
+    networks:
+      - dev-network
+    command:
+      - "gotenberg"
+      - "--api-timeout=30s"
+      - "--api-timeout-duration=30s"
+
+networks:
+  dev-network:
+    driver: bridge

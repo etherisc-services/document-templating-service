@@ -164,6 +164,10 @@ class PDFConversionError(DocumentProcessingError):
 # Pydantic models for API request/response
 from pydantic import BaseModel
 
+# Import linter service and models
+from services.docx_linter import DocxJinjaLinterService
+from models.schemas import LintOptions, LintResult
+
 class ImageData(BaseModel):
     """Model for inline image data"""
     data: str  # Base64 encoded image data
@@ -177,6 +181,7 @@ class TemplateRequest(BaseModel):
     template_data: Dict[str, Any]  # The data to inject into the template
     images: Optional[Dict[str, ImageData]] = None  # Optional images referenced in template
     undefined_behavior: Optional[str] = None  # Override undefined variable behavior: "debug", "silent", "strict"
+    linter_options: Optional[LintOptions] = None  # Optional linter configuration
 
 def create_error_response(error: DocumentProcessingError, status_code: int = 500) -> JSONResponse:
     """Create a structured error response"""
@@ -389,9 +394,15 @@ app = FastAPI(
     description="""
         This is the documentation of the REST API exposed by the document template processing microservice.
         This will allow you to inject data in a specific word document template and get the pdf format as a result. 🚀🚀🚀
+        
+        New features:
+        - DocX Jinja Template Linting: Validate Jinja2 syntax in Word documents
     """,
-    version="1.2.0"
+    version="1.3.0"
 )
+
+# Initialize linter service
+linter_service = DocxJinjaLinterService()
 
 SERVICE_STATUS = {'status': 'Service is healthy !'}
 
@@ -405,6 +416,107 @@ async def healthcheck():
     remove_temporary_files()
     return SERVICE_STATUS
 
+
+@app.post('/api/v1/lint-docx-template', response_model=LintResult)
+async def lint_docx_template(
+    document: UploadFile = File(..., description="DocX file containing Jinja2 template to lint"),
+    options: LintOptions = Body(default=LintOptions(), description="Linting configuration options")
+):
+    """
+    Lint a DocX file containing Jinja2 templates for syntax errors and structural issues.
+    
+    This endpoint validates:
+    - Jinja2 syntax correctness
+    - Matching tag pairs (if/endif, for/endfor, etc.)
+    - Template structure and nesting
+    - Code quality and best practices
+    
+    Returns comprehensive linting results including:
+    - List of errors found
+    - List of warnings and suggestions
+    - Template quality metrics
+    - Processing statistics
+    """
+    try:
+        # Input validation
+        if not document or not document.filename or document.filename == '':
+            error = FileProcessingError(
+                message="No file provided or filename is empty",
+                error_type="missing_file",
+                details={"requirement": "A valid .docx file must be uploaded"}
+            )
+            return create_error_response(error, 400)
+        
+        if not document.filename.lower().endswith('.docx'):
+            error = FileProcessingError(
+                message="Invalid file type. Only .docx files are supported for linting",
+                error_type="invalid_file_type",
+                details={
+                    "provided_filename": document.filename,
+                    "supported_types": [".docx"],
+                    "requirement": "Upload a Microsoft Word .docx file containing Jinja2 templates"
+                }
+            )
+            return create_error_response(error, 400)
+        
+        # Check file size (reasonable limit for linting)
+        file_content = await document.read()
+        file_size = len(file_content)
+        
+        if file_size > 10 * 1024 * 1024:  # 10MB limit for linting
+            error = FileProcessingError(
+                message="File too large for linting. Maximum size is 10MB",
+                error_type="file_too_large",
+                details={
+                    "max_size_mb": 10, 
+                    "file_size_bytes": file_size,
+                    "suggestion": "Try linting smaller sections of the document"
+                }
+            )
+            return create_error_response(error, 400)
+        
+        if file_size == 0:
+            error = FileProcessingError(
+                message="Uploaded file is empty",
+                error_type="empty_file",
+                details={"requirement": "File must contain content to lint"}
+            )
+            return create_error_response(error, 400)
+        
+        logger.info(f"Starting linting process for {document.filename} ({file_size} bytes)")
+        
+        # Perform linting
+        lint_result = await linter_service.lint_docx_file(
+            file_content=file_content,
+            filename=document.filename,
+            options=options
+        )
+        
+        logger.info(f"Linting completed for {document.filename}: "
+                   f"{lint_result.summary.total_errors} errors, "
+                   f"{lint_result.summary.total_warnings} warnings")
+        
+        return lint_result
+        
+    except FileProcessingError as e:
+        logger.error(f"File processing error during linting: {e.message}")
+        return create_error_response(e, 400)
+        
+    except Exception as e:
+        logger.error(f"Unexpected error during linting: {str(e)}")
+        logger.error(traceback.format_exc())
+        
+        error = DocumentProcessingError(
+            message=f"An unexpected error occurred during linting: {str(e)}",
+            error_type="linting_error",
+            details={
+                "filename": document.filename if document else "unknown",
+                "error": str(e),
+                "error_class": type(e).__name__
+            }
+        )
+        return create_error_response(error, 500)
+
 @app.post('/api/v1/process-template-document')
 async def process_document_template(
     data: Json = Body(None), 
@@ -416,13 +528,19 @@ async def process_document_template(
     
     Supports two usage modes:
     1. Simple mode: Use 'data' parameter with JSON object (legacy format)
-    2. Enhanced mode: Use 'request_data' parameter with template_data and images
+    2. Enhanced mode: Use 'request_data' parameter with template_data, images, and linter_options
     
-    Enhanced mode enables inline image support via base64 encoded PNGs.
+    Enhanced mode enables inline image support via base64 encoded PNGs and custom linter configuration.
+    
+    **NEW: Integrated Template Linting**
+    - Templates are automatically validated before processing (strict mode by default)
+    - If validation fails, comprehensive error details are returned as JSON instead of PDF
+    - Linter options can be customized in enhanced mode via 'linter_options' field
+    - Processing only continues if template validation passes
     
     Handles all stages with comprehensive error reporting:
     - File validation and upload
-    - Template syntax validation  
+    - Template linting and syntax validation (NEW)
     - Data injection with variable checking
     - Image processing (when images provided)
     - PDF conversion with Gotenberg
@@ -461,6 +579,7 @@ async def process_document_template(
                 template_data = request_obj.template_data
                 images_data = request_obj.images
                 api_undefined_behavior = request_obj.undefined_behavior
+                api_linter_options = request_obj.linter_options
                 logger.info(f"Enhanced mode: Processing with {len(template_data)} data keys and {len(images_data or {})} images")
             except json.JSONDecodeError as e:
                 error = TemplateProcessingError(
@@ -487,6 +606,7 @@ async def process_document_template(
             template_data = data
             images_data = None
             api_undefined_behavior = None
+            api_linter_options = None
             logger.info(f"Legacy mode: Processing with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data")
         else:
             # No data provided at all
@@ -568,6 +688,96 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
+        
+        # Stage 1.5: Template Linting (Pre-validation)
+        try:
+            # Configure linting options - strict by default
+            if api_linter_options is not None:
+                linter_options = api_linter_options
+                logger.info("Using API-provided linter options")
+            else:
+                # Default to strict linting
+                linter_options = LintOptions(
+                    verbose=False,
+                    check_undefined_vars=True,
+                    max_line_length=200,
+                    fail_on_warnings=False,  # Only fail on errors, not warnings
+                    check_tag_matching=True,
+                    check_nested_structure=True
+                )
+                logger.info("Using default strict linter options")
+            
+            # Read file content for linting
+            with open(file_path, 'rb') as f:
+                file_content = f.read()
+            
+            # Perform linting
+            logger.info(f"Starting template validation for {file.filename}")
+            lint_result = await linter_service.lint_docx_file(
+                file_content=file_content,
+                filename=file.filename,
+                options=linter_options
+            )
+            
+            # Check linting results
+            if not lint_result.success:
+                logger.warning(f"Template validation failed: {lint_result.summary.total_errors} errors found")
+                
+                # Clean up uploaded file before returning error
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                
+                # Return comprehensive linting error response
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "status": "template_validation_failed",
+                        "message": f"Template validation failed with {lint_result.summary.total_errors} errors",
+                        "linting_results": {
+                            "success": lint_result.success,
+                            "errors": [
+                                {
+                                    "line_number": error.line_number,
+                                    "column": error.column,
+                                    "error_type": error.error_type,
+                                    "message": error.message,
+                                    "context": error.context,
+                                    "tag_name": error.tag_name,
+                                    "suggestion": error.suggestion
+                                }
+                                for error in lint_result.errors
+                            ],
+                            "warnings": [
+                                {
+                                    "line_number": warning.line_number,
+                                    "warning_type": warning.warning_type,
+                                    "message": warning.message,
+                                    "suggestion": warning.suggestion
+                                }
+                                for warning in lint_result.warnings
+                            ],
+                            "summary": {
+                                "total_errors": lint_result.summary.total_errors,
+                                "total_warnings": lint_result.summary.total_warnings,
+                                "template_size": lint_result.summary.template_size,
+                                "lines_count": lint_result.summary.lines_count,
+                                "jinja_tags_count": lint_result.summary.jinja_tags_count,
+                                "completeness_score": lint_result.summary.completeness_score,
+                                "processing_time_ms": lint_result.summary.processing_time_ms
+                            },
+                            "template_preview": lint_result.template_preview
+                        }
+                    }
+                )
+            else:
+                logger.info(f"Template validation passed: {lint_result.summary.completeness_score:.1f}% completeness score")
+                if lint_result.warnings:
+                    logger.info(f"Template has {lint_result.summary.total_warnings} warnings (non-blocking)")
+            
+        except Exception as e:
+            logger.error(f"Template linting failed: {str(e)}")
+            # Don't block processing on linting errors - just log and continue
+            logger.warning("Continuing with template processing despite linting failure")
         
         # Stage 2: Template Loading and Image Processing
         try:

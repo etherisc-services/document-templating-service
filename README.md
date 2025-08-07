@@ -8,11 +8,14 @@
 
 A lightweight microservice for processing Word document templates with data injection and PDF conversion. Combines the power of [docxtpl](https://docxtpl.readthedocs.io/) templating with [Gotenberg](https://gotenberg.dev) PDF generation.
 
+**🔍 NEW: Integrated Template Linting** - All templates are automatically validated before processing with comprehensive error reporting.
+
 ## ✨ Features
 
 - 📄 Process `.docx` templates with dynamic data
 - 🔄 Convert results to PDF automatically  
 - 🚀 Fast REST API built with FastAPI
+- 🔍 **NEW**: Integrated Template Linting with strict validation by default
 - 🐳 Docker-ready with compose setup
 - ☸️ Kubernetes deployment manifests
 - 📚 Comprehensive documentation and examples
@@ -33,6 +36,7 @@ docker compose up -d
 - **[📋 Installation Guide](docs/installation.html)** - Complete setup instructions  
 - **[🔧 Usage Guide](docs/usage.html)** - Service usage and templating examples
 - **[🖼️ Image Support Guide](docs/image-support.html)** - Include inline images in templates
+- **[🔍 DocX Linter Guide](docs/docx-linter.md)** - **NEW**: Validate Jinja templates in Word documents
 - **[🐳 Docker Integration Guide](docs/integration.html)** - Integrate with existing Docker Compose stacks
 
 ## 🛠️ Technology Stack
