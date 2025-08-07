@@ -929,10 +929,7 @@ async def process_document_template(
                 else:
                     # Return PDF error report (default behavior, 200 OK)
                     logger.info(f"Generating PDF error report for failed template validation")
-                    template_data = None
-                    if request_obj and hasattr(request_obj, 'data') and request_obj.data:
-                        template_data = request_obj.data
-                    
+                    # Use the template_data that was already extracted earlier in the function
                     return await _generate_lint_pdf_report(lint_result, file.filename, template_data)
             else:
                 logger.info(f"Template validation passed: {lint_result.summary.completeness_score:.1f}% completeness score")
