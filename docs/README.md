@@ -15,7 +15,8 @@ Welcome to the Document Template Processing Service documentation.
 2. **[Usage Guide](usage.html)** - Quick start and overview
 3. **[API Endpoints](api-endpoints.html)** - Complete API reference
 4. **[Document Templates](document-templates.html)** - Create Jinja2 templates
-5. **[Examples](examples.html)** - Working code samples
+5. **[🔍 DocX Linter](docx-linter.html)** - **NEW**: Template validation and error detection
+6. **[Examples](examples.html)** - Working code samples
 
 ## Comprehensive Guides
 
@@ -39,6 +40,13 @@ Advanced image processing capabilities:
 - Base64 encoding for React applications
 - Size specifications and optimization
 - Template integration and troubleshooting
+
+### 🔍 **[DocX Linter](docx-linter.html)** ⭐ **NEW**
+Comprehensive template validation system:
+- Automatic syntax checking and error detection
+- Integrated validation before document processing
+- Configurable linting options and quality analysis
+- Detailed error reporting with suggestions
 
 ### 🚫 **[Error Handling](error-handling.html)**
 Understanding and debugging errors:
@@ -69,6 +77,7 @@ The service combines three powerful technologies:
 
 ✅ **Unified API** - Single endpoint with smart mode detection  
 ✅ **Image Support** - Inline images with Base64 encoding  
+✅ **Template Linting** - **NEW**: Automatic validation before processing  
 ✅ **Error Handling** - Comprehensive error reporting  
 ✅ **Docker Ready** - Complete containerization  
 ✅ **React Friendly** - Optimized for modern web applications  

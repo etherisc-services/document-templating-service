@@ -36,7 +36,7 @@ docker compose up -d
 - **[📋 Installation Guide](docs/installation.html)** - Complete setup instructions  
 - **[🔧 Usage Guide](docs/usage.html)** - Service usage and templating examples
 - **[🖼️ Image Support Guide](docs/image-support.html)** - Include inline images in templates
-- **[🔍 DocX Linter Guide](docs/docx-linter.md)** - **NEW**: Validate Jinja templates in Word documents
+- **[🔍 DocX Linter Guide](docs/docx-linter.html)** - **NEW**: Validate Jinja templates in Word documents
 - **[🐳 Docker Integration Guide](docs/integration.html)** - Integrate with existing Docker Compose stacks
 
 ## 🛠️ Technology Stack

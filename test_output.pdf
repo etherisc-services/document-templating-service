@@ -1,1 +1,0 @@
-{"status":"error","error_type":"unknown_template_error","message":"Unknown template processing error: Package not found at 'temp/valid_template.docx'","details":{"file":"valid_template.docx","error":"Package not found at 'temp/valid_template.docx'","error_class":"PackageNotFoundError"}}

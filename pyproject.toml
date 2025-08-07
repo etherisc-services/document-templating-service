@@ -121,7 +121,7 @@ ignore_missing_imports = true
 minversion = "7.0"
 addopts = "-ra -q --tb=short"
 testpaths = [
-    ".",
+    "tests",
 ]
 python_files = [
     "test_*.py",
@@ -138,8 +138,8 @@ asyncio_mode = "auto"
 [tool.coverage.run]
 source = [".", "services", "models"]
 omit = [
-    "test_*",
-    "*/tests/*",
+    "tests/*",
+    "examples/*",
     "temp/*",
     ".venv/*",
     "build/*",
