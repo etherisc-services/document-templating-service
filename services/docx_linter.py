@@ -45,12 +45,12 @@ class DocxJinjaLinterService:
         
         # Jinja tag patterns for matching analysis (including docxtpl extensions)
         self.tag_patterns = {
-            'block_start': re.compile(r'{%\s*([ptr]?)\s*(\w+)(?:\s+[^%]*)?%}'),  # Include p, tr, tc, r prefixes
-            'block_end': re.compile(r'{%\s*([ptr]?)\s*end(\w+)\s*%}'),  # Include p, tr, tc, r prefixes
+            'block_start': re.compile(r'{%\s*(p|tr|tc|r)?\s*(\w+)(?:\s+[^%]*)?%}'),  # Include p, tr, tc, r prefixes
+            'block_end': re.compile(r'{%\s*(p|tr|tc|r)?\s*end(\w+)\s*%}'),  # Include p, tr, tc, r prefixes
             'variable': re.compile(r'{{[^}]*}}'),
             'richtext_variable': re.compile(r'{{r\s+[^}]*}}'),  # RichText variables
             'comment': re.compile(r'{#[^#]*#}'),
-            'docxtpl_comment': re.compile(r'{#[ptr]\s+[^#]*#}'),  # DocXTPL paragraph/row/cell comments
+            'docxtpl_comment': re.compile(r'{#(p|tr|tc|r)\s+[^#]*#}'),  # DocXTPL paragraph/row/cell comments
             'full_tag': re.compile(r'{[%{#][^}%#]*[%}#]}')
         }
         
