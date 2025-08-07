@@ -524,7 +524,7 @@ async def lint_docx_template(
         return create_error_response(error, 500)
 
 
-async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str) -> FileResponse:
+async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str, template_data = None) -> FileResponse:
     """
     Generate a PDF report from linting results.
     
@@ -537,7 +537,7 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str)
     """
     try:
         # Create markdown report
-        markdown_content = create_lint_report_markdown(lint_result, document_name)
+        markdown_content = create_lint_report_markdown(lint_result, document_name, template_data)
         
         # Ensure temp directory exists
         os.makedirs('temp', exist_ok=True)
@@ -687,8 +687,9 @@ async def process_document_template(
     
     **NEW: Integrated Template Linting**
     - Templates are automatically validated before processing (strict mode by default)
-    - If validation fails, comprehensive error details are returned as JSON instead of PDF
+    - If validation fails, comprehensive error report is returned as PDF (or JSON if explicitly requested)
     - Linter options can be customized in enhanced mode via 'linter_options' field
+    - Status code is always 200 for linting results (errors or success)
     - Processing only continues if template validation passes
     
     Handles all stages with comprehensive error reporting:
@@ -880,48 +881,59 @@ async def process_document_template(
                 if os.path.exists(file_path):
                     os.remove(file_path)
                 
-                # Return comprehensive linting error response
-                return JSONResponse(
-                    status_code=400,
-                    content={
-                        "status": "template_validation_failed",
-                        "message": f"Template validation failed with {lint_result.summary.total_errors} errors",
-                        "linting_results": {
-                            "success": lint_result.success,
-                            "errors": [
-                                {
-                                    "line_number": error.line_number,
-                                    "column": error.column,
-                                    "error_type": error.error_type,
-                                    "message": error.message,
-                                    "context": error.context,
-                                    "tag_name": error.tag_name,
-                                    "suggestion": error.suggestion
-                                }
-                                for error in lint_result.errors
-                            ],
-                            "warnings": [
-                                {
-                                    "line_number": warning.line_number,
-                                    "warning_type": warning.warning_type,
-                                    "message": warning.message,
-                                    "suggestion": warning.suggestion
-                                }
-                                for warning in lint_result.warnings
-                            ],
-                            "summary": {
-                                "total_errors": lint_result.summary.total_errors,
-                                "total_warnings": lint_result.summary.total_warnings,
-                                "template_size": lint_result.summary.template_size,
-                                "lines_count": lint_result.summary.lines_count,
-                                "jinja_tags_count": lint_result.summary.jinja_tags_count,
-                                "completeness_score": lint_result.summary.completeness_score,
-                                "processing_time_ms": lint_result.summary.processing_time_ms
-                            },
-                            "template_preview": lint_result.template_preview
+                # Return linting error report based on format preference
+                # Check if user explicitly requested JSON format via linter options
+                if api_linter_options and api_linter_options.response_format == LintResponseFormat.JSON:
+                    # Return JSON error response (200 OK with linting results)
+                    return JSONResponse(
+                        status_code=200,
+                        content={
+                            "status": "template_validation_failed",
+                            "message": f"Template validation failed with {lint_result.summary.total_errors} errors",
+                            "linting_results": {
+                                "success": lint_result.success,
+                                "errors": [
+                                    {
+                                        "line_number": error.line_number,
+                                        "column": error.column,
+                                        "error_type": error.error_type,
+                                        "message": error.message,
+                                        "context": error.context,
+                                        "tag_name": error.tag_name,
+                                        "suggestion": error.suggestion
+                                    }
+                                    for error in lint_result.errors
+                                ],
+                                "warnings": [
+                                    {
+                                        "line_number": warning.line_number,
+                                        "warning_type": warning.warning_type,
+                                        "message": warning.message,
+                                        "suggestion": warning.suggestion
+                                    }
+                                    for warning in lint_result.warnings
+                                ],
+                                "summary": {
+                                    "total_errors": lint_result.summary.total_errors,
+                                    "total_warnings": lint_result.summary.total_warnings,
+                                    "template_size": lint_result.summary.template_size,
+                                    "lines_count": lint_result.summary.lines_count,
+                                    "jinja_tags_count": lint_result.summary.jinja_tags_count,
+                                    "completeness_score": lint_result.summary.completeness_score,
+                                    "processing_time_ms": lint_result.summary.processing_time_ms
+                                },
+                                "template_preview": lint_result.template_preview
+                            }
                         }
-                    }
-                )
+                    )
+                else:
+                    # Return PDF error report (default behavior, 200 OK)
+                    logger.info(f"Generating PDF error report for failed template validation")
+                    template_data = None
+                    if request_obj and hasattr(request_obj, 'data') and request_obj.data:
+                        template_data = request_obj.data
+                    
+                    return await _generate_lint_pdf_report(lint_result, file.filename, template_data)
             else:
                 logger.info(f"Template validation passed: {lint_result.summary.completeness_score:.1f}% completeness score")
                 if lint_result.warnings:
