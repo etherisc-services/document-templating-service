@@ -565,9 +565,10 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         resource_url = f'{gotenberg_url}/forms/chromium/convert/markdown'
         
         logger.info(f"Converting lint report to PDF via Gotenberg: {resource_url}")
+        logger.debug(f"Markdown content length: {len(markdown_content)} characters")
         
         with open(md_file_path, 'rb') as md_file:
-            files = {'files': (os.path.basename(md_file_path), md_file, 'text/markdown')}
+            files = {'files': ('index.html', md_file, 'text/markdown')}
             
             # Make request to Gotenberg with timeout
             response = requests.post(
@@ -643,9 +644,9 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         
         logger.error(f"Failed to generate lint report PDF: {str(e)}")
         
-        # Return JSON fallback if PDF generation fails
+        # Return JSON fallback if PDF generation fails (200 OK with error details)
         return JSONResponse(
-            status_code=500,
+            status_code=200,
             content={
                 "status": "pdf_generation_failed",
                 "message": f"Could not generate PDF report: {str(e)}",
