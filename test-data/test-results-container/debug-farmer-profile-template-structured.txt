@@ -1,0 +1,160 @@
+=== STRUCTURED TEXT EXTRACTED WITH python-docx ===
+
+   1: Farmer Profile Report
+   2: This is a template for creating a Word document (.docx) for comprehensive farmer profile PDF generation. Convert this markdown to a Word document and save as farmer-profile-template.docx.
+   3: {{ farmer.name }} - Farmer Profile
+   4: Report ID: {{ farmer.farmerCode }}-PROFILE-{{ generatedAt }}
+   5: Executive Summary
+   6: This comprehensive farmer profile provides detailed information about {{ farmer.name }}, including personal details, agricultural activities, location information, organizational relationships, payment methods, and supporting documentation.
+   7: 1. Personal Information
+   8: 2. Location Information
+   9: Geographic Details
+  10: Administrative Levels
+  11: {% if farmer.administrativeLevels %} 
+  12: {% else %}
+  13: No information on administrative levels available.
+  14: {% endif %}
+  15: 3. Agricultural Information
+  16: Primary Activities
+  17: Additional Agricultural Activities
+  18: {% if farmer.otherActivities %} 
+  19: {% for activity in farmer.otherActivities %}
+  20: {{ activity }}
+  21:  {% endfor %} 
+  22: {% else %} 
+  23: No additional activities specified. 
+  24: {% endif %}
+  25: 4. Organization Information
+  26: Primary Organization
+  27: Additional Organizations
+  28: {% if farmer.organizationIds %} The farmer is associated with {{ farmer.organizationIds | length }} additional organization(s) for business intelligence and credit scoring purposes.
+  29: Organization IDs: {{ farmer.organizationIds | join(', ') }} 
+  30: {% else %} 
+  31: No additional organizational relationships. 
+  32: {% endif %}
+  33: 5. Payment Information
+  34: {% if farmer.paymentDetails %}
+  35: {% for payment in farmer.paymentDetails %}
+  36: Payment Method {{ loop.index }}
+  37: Type: {{ payment.type | title | replace('_', ' ') }}
+  38: {% if payment.type == 'bank_transfer' %} 
+  39: {% elif payment.type == 'mobile_money' %}
+  40: {% endif %}
+  41: {% endfor %} 
+  42: {% else %} 
+  43: No payment methods have been configured for this farmer. 
+  44: {% endif %}
+  45: 6. Document Repository
+  46: Proof of Stake/Insurable Interest
+  47: {% if farmer.proofOfStake %} 
+  48: Total Documents: {{ farmer.proofOfStake | length }} 
+  49: {% else %} 
+  50: No proof of stake documents have been uploaded. 
+  51: {% endif %}
+  52: Document Storage Information
+  53: All documents are securely stored in encrypted cloud storage with access controls and audit logging. Documents can be retrieved through the farmer management system.
+  54: 7. Farm Location Map
+  55: {% if farmer.latitude and farmer.longitude %} GPS Coordinates: {{ farmer.latitude }}, {{ farmer.longitude }}
+  56: Note: A detailed satellite map showing the exact farm location is available in the digital version of this report. The coordinates provided above can be used with any mapping service to locate the farm.
+  57: Google Maps Link: Google Maps
+  58: {% if farmer.aez %} Agro-Ecological Zone: {{ farmer.aez }} This zone classification helps determine appropriate agricultural practices and risk assessments for the region. 
+  59: {% endif %} 
+  60: {% else %} Farm location coordinates are not available. Please update the farmer profile with GPS coordinates for accurate location mapping. 
+  61: {% endif %}
+  62: 8. KYC & Compliance Status
+  63: Data Quality Assessment
+  64: {% if farmer.email and farmer.latitude and farmer.primaryActivity and farmer.paymentDetails %} ✅ Excellent - All required fields are complete 
+  65: {% elif farmer.phone and farmer.name %} 
+  66: ⚠️ Good - Core information present, some optional fields missing 
+  67: {% else %} 
+  68: ❌ Needs Attention - Critical information missing 
+  69: {% endif %}
+  70: 9. Historical Activity
+  71: Policy History
+  72: {% if farmer.policies and farmer.policies | length > 0 %} 
+  73: The farmer has {{ farmer.policies | length }} insurance policies in the system. 
+  74: {% else %} 
+  75: No insurance policies found for this farmer. 
+  76: {% endif %}
+  77: Quote History
+  78: {% if farmer.quotes and farmer.quotes | length > 0 %} 
+  79: The farmer has {{ farmer.quotes | length }} insurance quotes in the system. 
+  80: {% else %} 
+  81: No insurance quotes found for this farmer. 
+  82: {% endif %}
+  83: 10. Risk Assessment & Recommendations
+  84: Location Risk Factors
+  85: {% if farmer.latitude and farmer.longitude %}
+  86: ✅ GPS Coordinates Available - Enables precise risk modeling 
+  87: {% if farmer.aez %}
+  88: ✅ AEZ Classification - Zone {{ farmer.aez }} agricultural practices identified 
+  89: {% else %}
+  90: ⚠️ AEZ Pending - Agro-ecological zone classification needed 
+  91: {% endif %} 
+  92: {% else %}
+  93: ❌ Location Missing - GPS coordinates required for risk assessment 
+  94: {% endif %}
+  95: Data Completeness Score
+  96: {% set completeness_score = 0 %}{% if farmer.name %}{% set completeness_score = completeness_score + 10 %}{% endif %}{% if farmer.phone %}{% set completeness_score = completeness_score + 10 %}{% endif %}{% if farmer.email %}{% set completeness_score = completeness_score + 10 %}{% endif %}{% if farmer.latitude and farmer.longitude %}{% set completeness_score = completeness_score + 15 %}{% endif %}{% if farmer.primaryActivity or farmer.crop %}{% set completeness_score = completeness_score + 15 %}{% endif %}{% if farmer.area %}{% set completeness_score = completeness_score + 10 %}{% endif %}{% if farmer.paymentDetails %}{% set completeness_score = completeness_score + 15 %}{% endif %}{% if farmer.proofOfStake %}{% set completeness_score = completeness_score + 15 %}{% endif %}
+  97: Profile Completeness: {{ completeness_score }}%
+  98: {% if completeness_score >= 80 %}🟢 Excellent - Profile is comprehensive and ready for all services {% elif completeness_score >= 60 %}🟡 Good - Profile is sufficient for basic services 
+  99: {% else %}🔴 Needs Improvement - Additional information required{% endif %}
+ 100: Report Footer
+ 101: Generated By: {{ user.name }} ({{ user.email }})
+ 102: Organization: {{ user.organization.name }}
+ 103: Report Type: Comprehensive Farmer Profile
+ 104: System Version: {{ systemVersion | default('v1.0') }}
+ 105: Data Privacy Notice: This document contains personal and confidential information. Handle according to your organization's data protection policies and applicable privacy regulations.
+ 106: Document Authenticity: This report was generated automatically from the farmer management system. For verification, contact {{ user.organization.name }} at {{ user.email }}.
+ 107: Field | Value
+ 108: Full Name | {{ farmer.name }}
+ 109: Farmer Code | {{ farmer.farmerCode }}
+ 110: Phone Number | {{ farmer.phone }}
+ 111: Email Address | {% if farmer.email %}{{ farmer.email }}{% else %}Not provided{% endif %}
+ 112: Registration Date | {{ farmer.createdAt }}
+ 113: Last Updated | {{ farmer.updatedAt }}
+ 114: Status | {% if farmer.isActive %}Active{% else %}Inactive{% endif %}
+ 115: Field | Value
+ 116: Country | {{ farmer.countryCode }}
+ 117: Coordinates | {% if farmer.latitude and farmer.longitude %}{{ farmer.latitude }}, {{ farmer.longitude }}{% else %}Not available{% endif %}
+ 118: AEZ (Agro-Ecological Zone) | {% if farmer.aez %}{{ farmer.aez }}{% else %}Not determined{% endif %}
+ 119: {%tr for level, value in farmer.administrativeLevels.items() %} | {%tr for level, value in farmer.administrativeLevels.items() %}
+ 120: Level {{ level }} | {{ value }}
+ 121: {%tr endfor %} | {%tr endfor %}
+ 122: Field | Value
+ 123: Primary Activity/Products | {% if farmer.primaryActivity %}{{ farmer.primaryActivity }}{% elif farmer.crop %}{{ farmer.crop }}{% else %}Not specified{% endif %}
+ 124: Farm Size | {% if farmer.area %}{{ farmer.area }} hectares{% else %}Not specified{% endif %}
+ 125: Field | Value
+ 126: Organization Name | {{ farmer.organization.name }}
+ 127: Organization Code | {{ farmer.organization.code }}
+ 128: Organization ID | {{ farmer.organization.id }}
+ 129: Field | Value
+ 130: Account Name | {{ payment.account_name }}
+ 131: Bank Name | {{ payment.bank_name }}
+ 132: Currency | {{ payment.currency }}
+ 133: {%tr if payment.branch_name_or_code %} | {%tr if payment.branch_name_or_code %}
+ 134: Branch | {{ payment.branch_name_or_code }}
+ 135: {%tr endif %} | {%tr endif %}
+ 136: Field | Value
+ 137: Mobile Number | {{ payment.registered_mobile_number }}
+ 138: Full Name | {{ payment.full_name }}
+ 139: {%tr if payment.provider %} | {%tr if payment.provider %}
+ 140: Provider | {{ payment.provider }}
+ 141: {%tr endif %} | {%tr endif %}
+ 142: Document # | Filename | Type | Upload Date | File Size
+ 143: {%tr for doc in farmer.proofOfStake %} | {%tr for doc in farmer.proofOfStake %} | {%tr for doc in farmer.proofOfStake %} | {%tr for doc in farmer.proofOfStake %} | {%tr for doc in farmer.proofOfStake %}
+ 144: {{ loop.index }} | {{ doc.filename }} | {{ doc.type }} | {{ doc.uploadedAt }} | {{ doc.size | filesizeformat }}
+ 145: {%tr endfor %} | {%tr endfor %} | {%tr endfor %} | {%tr endfor %} | {%tr endfor %}
+ 146: Field | Value
+ 147: KYC Status | {% if farmer.kycStatus %}{{ farmer.kycStatus }}{% else %}Pending{% endif %}
+ 148: Account Status | {% if farmer.isActive %}Active{% else %}Inactive{% endif %}
+ 149: Data Completeness | {% if farmer.email and farmer.latitude and farmer.primaryActivity %}Complete{% else %}
+ 150: Needs Update{% endif %}
+ 151: Field | Value
+ 152: Member Since | {{ farmer.createdAt }}
+ 153: Profile Last Updated | {{ farmer.updatedAt }}
+ 154: Days as Member | {{ daysSinceRegistration }}
+
+=== SUMMARY ===
+Total lines: 154
+Total characters: 8523

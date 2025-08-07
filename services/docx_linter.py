@@ -1,16 +1,27 @@
 """
-DocX Jinja Linter Service
+DocX Jinja Linter Service - Revised Architecture
 
 This module provides comprehensive linting capabilities for Jinja2 templates embedded in .docx files.
-It extracts template content from Word documents and validates Jinja syntax, tag matching, and structure.
+It uses docxtpl for consistent extraction and preprocessing, then applies custom parsing logic
+for accurate line number detection and unmatched tag analysis.
+
+Workflow:
+1. Use docxtpl to extract XML from docx
+2. Use docxtpl to process extended docx tags (p, tr, tc, r, etc.)
+3. Apply custom logic to lint and find unmatched pair tags
+4. Output structured JSON with metadata, formatted input, and detailed errors
+5. Optionally convert JSON to markdown and PDF
 """
 
 import re
 import time
+import json
+import tempfile
+import os
 from typing import List, Dict, Any, Optional, Tuple
+from docxtpl import DocxTemplate
 from docx import Document
 from jinja2 import Environment, TemplateSyntaxError, select_autoescape
-from jinja2.nodes import Node
 from jinja2.exceptions import TemplateError
 import logging
 
@@ -23,51 +34,57 @@ from models.schemas import (
 logger = logging.getLogger(__name__)
 
 
+class LintResultJson:
+    """Structured JSON format for linter results."""
+    
+    def __init__(self):
+        self.metadata = {}
+        self.input_data = {}
+        self.syntax_errors = []
+        self.missing_variables = []
+        self.processing_info = {}
+    
+    def to_dict(self) -> dict:
+        return {
+            "metadata": self.metadata,
+            "input_data": self.input_data,
+            "syntax_errors": self.syntax_errors,
+            "missing_variables": self.missing_variables,
+            "processing_info": self.processing_info
+        }
+
+
 class DocxJinjaLinterService:
     """
-    Service for linting Jinja2 templates embedded in .docx files.
+    Revised linter service using docxtpl for extraction and custom parsing logic.
     
-    Provides comprehensive validation including:
-    - Syntax checking using Jinja2 parser
-    - Tag matching (if/endif, for/endfor, etc.)
-    - Nested structure validation
-    - Undefined variable detection
-    - Template quality analysis
+    Architecture:
+    1. Extract XML using docxtpl.get_xml()
+    2. Process extended tags using docxtpl.patch_xml()
+    3. Parse with custom logic for accurate line numbers
+    4. Output structured JSON format
     """
     
     def __init__(self):
-        """Initialize the linter service with a Jinja2 environment."""
+        """Initialize the linter service."""
         self.env = Environment(
             autoescape=select_autoescape(['html', 'xml']),
             trim_blocks=True,
             lstrip_blocks=True
         )
         
-        # Jinja tag patterns for matching analysis (including docxtpl extensions)
-        self.tag_patterns = {
-            'block_start': re.compile(r'{%\s*(p|tr|tc|r)?\s*(\w+)(?:\s+[^%]*)?%}'),  # Include p, tr, tc, r prefixes
-            'block_end': re.compile(r'{%\s*(p|tr|tc|r)?\s*end(\w+)\s*%}'),  # Include p, tr, tc, r prefixes
-            'variable': re.compile(r'{{[^}]*}}'),
-            'richtext_variable': re.compile(r'{{r\s+[^}]*}}'),  # RichText variables
-            'comment': re.compile(r'{#[^#]*#}'),
-            'docxtpl_comment': re.compile(r'{#(p|tr|tc|r)\s+[^#]*#}'),  # DocXTPL paragraph/row/cell comments
-            'full_tag': re.compile(r'{[%{#][^}%#]*[%}#]}')
-        }
-        
-        # Tags that require matching end tags (excluding 'set' which doesn't need endset)
+        # Tags that require matching end tags
         self.paired_tags = {
             'if', 'for', 'with', 'block', 'macro', 'call', 
             'filter', 'trans', 'pluralize', 'raw', 'autoescape'
         }
         
-        # Tags that are self-contained (including docxtpl extensions)
+        # Self-contained tags
         self.standalone_tags = {
             'else', 'elif', 'endif', 'endfor', 'endwith', 'endblock', 
             'endmacro', 'endcall', 'endfilter', 'endtrans', 'endpluralize', 
             'endraw', 'endautoescape', 'include', 'import', 'from', 'extends', 
-            'break', 'continue', 'set',  # 'set' is standalone, no endset needed
-            # DocXTPL-specific tags
-            'cellbg', 'colspan', 'hm', 'vm'  # DocXTPL special tags
+            'break', 'continue', 'set'
         }
 
     async def lint_docx_file(
@@ -77,7 +94,7 @@ class DocxJinjaLinterService:
         options: LintOptions = None
     ) -> LintResult:
         """
-        Main linting method that processes a .docx file and returns comprehensive results.
+        Main linting method using the revised architecture.
         
         Args:
             file_content: Raw bytes of the .docx file
@@ -96,510 +113,758 @@ class DocxJinjaLinterService:
         warnings = []
         
         try:
-            # Stage 1: Extract template content
-            logger.info(f"Extracting template content from {filename}")
-            template_content = self._extract_template_content(file_content, filename)
+            # Stage 1: Extract plaintext using python-docx (independent of docxtpl)
+            logger.info(f"Step 1: Extracting plaintext from {filename} using python-docx")
+            structured_text = self._extract_structured_text(file_content, filename)
             
-            if not template_content or not template_content.strip():
-                errors.append(LintError(
-                    error_type=LintErrorType.DOCUMENT_ERROR,
-                    message="No template content found in document",
-                    suggestion="Ensure the document contains Jinja2 template syntax"
-                ))
+            # Stage 2: Check for unmatched tags in plaintext first
+            logger.info(f"Step 2: Checking for unmatched tags in plaintext")
+            syntax_errors = self._find_unmatched_tags(structured_text, filename)
+            
+            # Stage 3: If unmatched tags found, return error report immediately
+            if syntax_errors:
+                logger.info(f"Step 3: Found {len(syntax_errors)} syntax errors, creating error report")
+                errors.extend([self._convert_to_lint_error(err) for err in syntax_errors])
                 
-            # Stage 2: Basic statistics
-            lines = template_content.split('\n')
-            lines_count = len(lines)
-            jinja_tags = self._count_jinja_tags(template_content)
+                # Create basic input data for error report
+                input_data = self._create_basic_input_data(structured_text, filename)
+                
+                # Save debug output
+                await self._save_debug_output_basic(structured_text, filename)
+                
+                # Skip docxtpl processing and go directly to result creation
+                processing_time = (time.time() - start_time) * 1000
+                metadata = self._create_metadata(filename, start_time, processing_time)
+                
+                json_result = self._create_json_result(
+                    metadata, input_data, syntax_errors, [], processing_time
+                )
+                
+                # Save intermediate JSON result to file
+                await self._save_intermediate_json(json_result, filename)
+                
+                result = self._convert_json_to_lint_result(
+                    json_result, errors, warnings, structured_text, options
+                )
+                
+                # Save intermediate markdown for debugging
+                await self._save_intermediate_markdown(result, filename)
+                
+                logger.info(f"Early termination: {len(errors)} syntax errors found")
+                return result
             
-            # Stage 3: Syntax validation
-            if options.check_undefined_vars or template_content.strip():
-                syntax_errors = self._validate_jinja_syntax(template_content, options)
-                errors.extend(syntax_errors)
+            # Stage 4: If syntax is clean, proceed with docxtpl processing
+            logger.info(f"Step 4: Syntax clean, proceeding with docxtpl processing")
+            doc_template, raw_xml = self._extract_xml_with_docxtpl(file_content, filename)
             
-            # Stage 4: Tag matching validation
-            if options.check_tag_matching:
-                tag_errors = self._check_tag_matching(template_content, options)
-                errors.extend(tag_errors)
+            # Stage 5: Use docxtpl to process extended docx tags
+            logger.info(f"Step 5: Processing extended docx tags with docxtpl")
+            processed_xml = self._process_extended_tags(doc_template, raw_xml)
             
-            # Stage 5: Structure validation
-            if options.check_nested_structure:
-                structure_errors = self._check_template_structure(template_content, options)
-                errors.extend(structure_errors)
+            # Stage 6: Create structured input data for JSON
+            logger.info(f"Step 6: Creating structured input data")
+            input_data = self._create_input_data(raw_xml, processed_xml, structured_text, filename)
             
-            # Stage 6: Quality checks and warnings
-            quality_warnings = self._check_template_quality(template_content, lines, options)
-            warnings.extend(quality_warnings)
+            # Stage 7: Save debug output for analysis
+            logger.info(f"Step 7: Saving debug output for analysis")
+            await self._save_debug_output(raw_xml, processed_xml, structured_text, filename)
             
-            # Stage 7: Calculate completeness score
-            completeness_score = self._calculate_completeness_score(
-                template_content, len(errors), len(warnings), jinja_tags
-            )
+            # Stage 8: Find missing variables using docxtpl
+            logger.info(f"Step 8: Finding missing variables")
+            if options.check_undefined_vars:
+                missing_vars = self._find_missing_variables(doc_template, structured_text)
+                for var_info in missing_vars:
+                    warnings.append(LintWarning(
+                        warning_type=LintWarningType.UNUSED_VARIABLE,
+                        message=f"Undefined variable: {var_info['variable']}",
+                        line_number=var_info.get('line_number'),
+                        suggestion=f"Ensure '{var_info['variable']}' is provided in template data"
+                    ))
             
+            # Stage 9: Create metadata and processing info
             processing_time = (time.time() - start_time) * 1000
+            metadata = self._create_metadata(filename, start_time, processing_time)
             
-            # Create summary
-            summary = LintSummary(
-                total_errors=len(errors),
-                total_warnings=len(warnings),
-                template_size=len(template_content),
-                lines_count=lines_count,
-                jinja_tags_count=jinja_tags,
-                completeness_score=completeness_score,
-                processing_time_ms=round(processing_time, 2)
+            # Stage 10: Generate structured JSON result
+            json_result = self._create_json_result(
+                metadata, input_data, syntax_errors, 
+                [self._convert_warning_to_dict(w) for w in warnings], 
+                processing_time
             )
             
-            # Create preview (first 500 chars)
-            preview = template_content[:500] if len(template_content) > 500 else template_content
-            if len(template_content) > 500:
-                preview += "..."
+            # Save intermediate JSON result to file
+            await self._save_intermediate_json(json_result, filename)
             
-            success = len(errors) == 0 and (not options.fail_on_warnings or len(warnings) == 0)
-            
-            result = LintResult(
-                success=success,
-                errors=errors,
-                warnings=warnings,
-                summary=summary,
-                template_content=template_content if options.verbose else None,
-                template_preview=preview
+            # Stage 11: Convert to traditional LintResult format
+            result = self._convert_json_to_lint_result(
+                json_result, errors, warnings, structured_text, options
             )
+            
+            # Save intermediate markdown for debugging
+            await self._save_intermediate_markdown(result, filename)
             
             logger.info(f"Linting completed: {len(errors)} errors, {len(warnings)} warnings")
             return result
             
         except Exception as e:
             logger.error(f"Linting failed for {filename}: {str(e)}")
-            
-            # Create error result
-            processing_time = (time.time() - start_time) * 1000
-            
-            if isinstance(e, DocxLinterException):
-                errors.append(LintError(
-                    error_type=LintErrorType.DOCUMENT_ERROR,
-                    message=str(e),
-                    suggestion="Check document format and content"
-                ))
-            else:
-                errors.append(LintError(
-                    error_type=LintErrorType.DOCUMENT_ERROR,
-                    message=f"Unexpected error during linting: {str(e)}",
-                    suggestion="Please check the document format and try again"
-                ))
-            
-            summary = LintSummary(
-                total_errors=len(errors),
-                total_warnings=0,
-                template_size=0,
-                lines_count=0,
-                jinja_tags_count=0,
-                processing_time_ms=round(processing_time, 2)
-            )
-            
-            return LintResult(
-                success=False,
-                errors=errors,
-                warnings=[],
-                summary=summary,
-                template_preview=None
-            )
+            return self._create_error_result(e, filename, start_time)
 
-    def _extract_template_content(self, file_content: bytes, filename: str) -> str:
+    def _extract_xml_with_docxtpl(self, file_content: bytes, filename: str) -> Tuple[DocxTemplate, str]:
         """
-        Extract Jinja template content from .docx file.
+        Step 1: Use docxtpl to extract XML from docx.
         
         Args:
             file_content: Raw bytes of the .docx file
             filename: Original filename for error reporting
             
         Returns:
-            Extracted template content as string
-            
-        Raises:
-            DocumentExtractionException: If extraction fails
+            Tuple of (DocxTemplate instance, raw XML string)
         """
         try:
-            import tempfile
-            import os
-            
             # Create temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
                 temp_file.write(file_content)
                 temp_file_path = temp_file.name
             
             try:
-                # Load document
-                doc = Document(temp_file_path)
-                content_parts = []
+                # Create DocxTemplate instance
+                doc_template = DocxTemplate(temp_file_path)
+                doc_template.init_docx()
                 
-                # Extract text from paragraphs
-                for paragraph in doc.paragraphs:
-                    if paragraph.text.strip():
-                        content_parts.append(paragraph.text)
+                # Extract raw XML
+                raw_xml = doc_template.get_xml()
                 
-                # Extract text from tables
-                for table in doc.tables:
-                    for row in table.rows:
-                        for cell in row.cells:
-                            if cell.text.strip():
-                                content_parts.append(cell.text)
-                
-                # Extract text from headers and footers
-                for section in doc.sections:
-                    # Headers
-                    if section.header:
-                        for paragraph in section.header.paragraphs:
-                            if paragraph.text.strip():
-                                content_parts.append(paragraph.text)
-                    
-                    # Footers
-                    if section.footer:
-                        for paragraph in section.footer.paragraphs:
-                            if paragraph.text.strip():
-                                content_parts.append(paragraph.text)
-                
-                # Combine all content
-                template_content = '\n'.join(content_parts)
-                
-                logger.info(f"Extracted {len(template_content)} characters from {filename}")
-                return template_content
+                logger.debug(f"Successfully extracted XML from {filename}: {len(raw_xml)} characters")
+                return doc_template, raw_xml
                 
             finally:
-                # Clean up temporary file
                 if os.path.exists(temp_file_path):
                     os.unlink(temp_file_path)
                     
         except Exception as e:
-            raise DocumentExtractionException(f"Failed to extract content from {filename}: {str(e)}")
+            raise DocumentExtractionException(
+                f"Failed to extract XML from {filename} using docxtpl: {str(e)}"
+            )
 
-    def _validate_jinja_syntax(self, content: str, options: LintOptions) -> List[LintError]:
+    def _process_extended_tags(self, doc_template: DocxTemplate, raw_xml: str) -> str:
         """
-        Validate Jinja2 syntax using the Jinja2 parser.
+        Step 2: Use docxtpl to process extended docx tags (p, tr, tc, r, etc.).
         
         Args:
-            content: Template content to validate
-            options: Linting options
+            doc_template: DocxTemplate instance
+            raw_xml: Raw XML content
             
         Returns:
-            List of syntax errors found
+            Processed XML with extended tags converted to standard Jinja2
         """
-        errors = []
-        
         try:
-            # Try to parse the template
-            self.env.parse(content)
-            logger.debug("Jinja2 syntax validation passed")
+            # Use docxtpl's patch_xml to process extended tags
+            processed_xml = doc_template.patch_xml(raw_xml)
             
-        except TemplateSyntaxError as e:
-            error = LintError(
-                line_number=getattr(e, 'lineno', None),
-                column=getattr(e, 'colno', None),
-                error_type=LintErrorType.SYNTAX_ERROR,
-                message=f"Jinja2 syntax error: {str(e)}",
-                context=self._get_line_context(content, getattr(e, 'lineno', None)),
-                suggestion="Check Jinja2 syntax documentation for correct tag format"
-            )
-            errors.append(error)
-            logger.warning(f"Syntax error at line {getattr(e, 'lineno', 'unknown')}: {str(e)}")
+            logger.debug(f"Processed extended tags: {len(raw_xml)} -> {len(processed_xml)} characters")
+            return processed_xml
             
-        except TemplateError as e:
-            error = LintError(
-                error_type=LintErrorType.SYNTAX_ERROR,
-                message=f"Template error: {str(e)}",
-                suggestion="Check template for syntax issues"
-            )
-            errors.append(error)
-            logger.warning(f"Template error: {str(e)}")
-            
-        return errors
+        except Exception as e:
+            logger.warning(f"Failed to process extended tags: {str(e)}")
+            # Fallback to raw XML if processing fails
+            return raw_xml
 
-    def _check_tag_matching(self, content: str, options: LintOptions) -> List[LintError]:
+    def _extract_structured_text(self, file_content: bytes, filename: str) -> str:
         """
-        Check for matching Jinja tag pairs (if/endif, for/endfor, etc.).
+        Step 3: Extract structured text using python-docx to preserve document layout.
         
         Args:
-            content: Template content to check
-            options: Linting options
+            file_content: Raw bytes of the .docx file
+            filename: Document filename for error reporting
             
         Returns:
-            List of tag matching errors
+            Structured text with proper line breaks
         """
-        errors = []
-        lines = content.split('\n')
-        tag_stack = []  # Stack to track opening tags
-        
-        for line_num, line in enumerate(lines, 1):
-            # Find all Jinja tags in the line
-            block_starts = self.tag_patterns['block_start'].finditer(line)
-            block_ends = self.tag_patterns['block_end'].finditer(line)
+        try:
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                temp_file.write(file_content)
+                temp_file_path = temp_file.name
             
-            # Process opening tags
-            for match in block_starts:
-                prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
-                tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
-                full_match = match.group(0)
+            try:
+                doc = Document(temp_file_path)
+                full_text = []
                 
-                if tag_name in self.paired_tags:
-                    tag_stack.append({
-                        'tag': tag_name,
-                        'prefix': prefix,
-                        'line': line_num,
-                        'content': full_match.strip(),
-                        'position': match.start()
-                    })
-                elif tag_name not in self.standalone_tags:
-                    # Unknown tag (but don't flag docxtpl prefixed tags as unknown)
-                    if not prefix or prefix not in ['p', 'tr', 'tc', 'r']:
-                        errors.append(LintError(
-                        line_number=line_num,
-                        column=match.start(),
-                        error_type=LintErrorType.SYNTAX_ERROR,
-                        message=f"Unknown Jinja tag: {tag_name}",
-                        context=line.strip(),
-                        tag_name=tag_name,
-                        suggestion="Check if tag name is spelled correctly"
-                    ))
-            
-            # Process closing tags
-            for match in block_ends:
-                end_prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
-                end_tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
-                full_match = match.group(0)
+                # Extract paragraph text
+                for paragraph in doc.paragraphs:
+                    if paragraph.text.strip():  # Skip empty paragraphs
+                        full_text.append(paragraph.text)
                 
-                if not tag_stack:
-                    # Closing tag without opening
-                    errors.append(LintError(
-                        line_number=line_num,
-                        column=match.start(),
-                        error_type=LintErrorType.MISMATCHED_TAG,
-                        message=f"Closing tag '{end_tag_name}' without matching opening tag",
-                        context=line.strip(),
-                        tag_name=end_tag_name,
-                        suggestion=f"Add opening {{% {end_tag_name} %}} tag before this line"
-                    ))
-                    continue
+                # Extract table text
+                for table in doc.tables:
+                    for row in table.rows:
+                        row_text = []
+                        for cell in row.cells:
+                            row_text.append(cell.text.strip())
+                        full_text.append(' | '.join(row_text))
                 
-                # Check if closing tag matches the most recent opening tag
-                expected_tag = tag_stack[-1]['tag']
-                expected_prefix = tag_stack[-1].get('prefix', '')
-                if end_tag_name == expected_tag and end_prefix == expected_prefix:
-                    tag_stack.pop()  # Correct match
-                else:
-                    # Mismatched tags
-                    opening_info = tag_stack[-1]
-                    expected_full = f"{expected_prefix}end{expected_tag}" if expected_prefix else f"end{expected_tag}"
-                    found_full = f"{end_prefix}end{end_tag_name}" if end_prefix else f"end{end_tag_name}"
-                    errors.append(LintError(
-                        line_number=line_num,
-                        column=match.start(),
-                        error_type=LintErrorType.MISMATCHED_TAG,
-                        message=f"Expected '{expected_full}' but found '{found_full}'",
-                        context=line.strip(),
-                        tag_name=end_tag_name,
-                        suggestion=f"Change to {{% {expected_full} %}} or check tag nesting (opened at line {opening_info['line']})"
-                    ))
-        
-        # Check for unclosed tags
-        for unclosed_tag in tag_stack:
-            tag_prefix = unclosed_tag.get('prefix', '')
-            tag_name = unclosed_tag['tag']
-            full_tag = f"{tag_prefix}{tag_name}" if tag_prefix else tag_name
-            close_tag = f"{tag_prefix}end{tag_name}" if tag_prefix else f"end{tag_name}"
-            
-            errors.append(LintError(
-                line_number=unclosed_tag['line'],
-                error_type=LintErrorType.UNCLOSED_TAG,
-                message=f"Unclosed '{full_tag}' tag",
-                context=unclosed_tag['content'],
-                tag_name=tag_name,
-                suggestion=f"Add {{% {close_tag} %}} tag to close this block"
-            ))
-        
-        logger.debug(f"Tag matching check found {len(errors)} errors")
-        return errors
-
-    def _check_template_structure(self, content: str, options: LintOptions) -> List[LintError]:
-        """
-        Check nested structure and tag ordering.
-        
-        Args:
-            content: Template content to check
-            options: Linting options
-            
-        Returns:
-            List of structure errors
-        """
-        errors = []
-        lines = content.split('\n')
-        
-        # Track nesting depth and context
-        nesting_stack = []
-        max_depth = 0
-        current_depth = 0
-        
-        for line_num, line in enumerate(lines, 1):
-            # Find block tags
-            block_starts = self.tag_patterns['block_start'].finditer(line)
-            block_ends = self.tag_patterns['block_end'].finditer(line)
-            
-            # Process opening tags
-            for match in block_starts:
-                prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
-                tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
+                structured_text = '\n'.join(full_text)
+                logger.debug(f"Extracted structured text: {len(structured_text)} characters, {len(full_text)} lines")
+                return structured_text
                 
-                if tag_name in self.paired_tags:
-                    current_depth += 1
-                    max_depth = max(max_depth, current_depth)
+            finally:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
                     
-                    nesting_stack.append({
-                        'tag': tag_name,
-                        'line': line_num,
-                        'depth': current_depth
-                    })
-                    
-                    # Check for excessive nesting
-                    if current_depth > 10:
-                        errors.append(LintError(
-                            line_number=line_num,
-                            error_type=LintErrorType.NESTED_ERROR,
-                            message=f"Excessive nesting depth ({current_depth})",
-                            context=line.strip(),
-                            tag_name=tag_name,
-                            suggestion="Consider breaking complex logic into smaller templates"
-                        ))
-            
-            # Process closing tags
-            for match in block_ends:
-                end_prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
-                end_tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
-                
-                if nesting_stack and end_tag_name == nesting_stack[-1]['tag']:
-                    nesting_stack.pop()
-                    current_depth -= 1
-        
-        logger.debug(f"Structure check found {len(errors)} errors, max depth: {max_depth}")
-        return errors
+        except Exception as e:
+            logger.error(f"Failed to extract structured text from {filename}: {str(e)}")
+            return ""
 
-    def _check_template_quality(self, content: str, lines: List[str], options: LintOptions) -> List[LintWarning]:
+    def _create_input_data(self, raw_xml: str, processed_xml: str, structured_text: str, filename: str) -> dict:
         """
-        Perform quality checks and generate warnings.
+        Step 4: Create structured input data for JSON output.
         
         Args:
-            content: Template content
-            lines: List of template lines
-            options: Linting options
+            raw_xml: Original XML content
+            processed_xml: Processed XML content
+            structured_text: Structured text from python-docx
+            filename: Document filename
             
         Returns:
-            List of quality warnings
+            Structured input data dictionary
         """
-        warnings = []
+        lines = structured_text.split('\n')
+        return {
+            "filename": filename,
+            "raw_xml_size": len(raw_xml),
+            "processed_xml_size": len(processed_xml),
+            "structured_text_size": len(structured_text),
+            "structured_text_lines": len(lines),
+            "structured_text_preview": structured_text[:500] + "..." if len(structured_text) > 500 else structured_text,
+            "structured_text_full": structured_text,
+            "extraction_method": "python-docx + docxtpl",
+            "processing_method": "docxtpl.patch_xml + python-docx structure"
+        }
+
+    async def _save_debug_output(self, raw_xml: str, processed_xml: str, structured_text: str, filename: str) -> None:
+        """
+        Step 5: Save debug output files for analysis.
         
-        # Check line length
-        for line_num, line in enumerate(lines, 1):
-            if len(line) > options.max_line_length:
-                warnings.append(LintWarning(
-                    line_number=line_num,
-                    warning_type=LintWarningType.LONG_LINE,
-                    message=f"Line too long ({len(line)} > {options.max_line_length} characters)",
-                    context=line[:100] + "..." if len(line) > 100 else line,
-                    suggestion="Consider breaking long lines for better readability"
-                ))
+        Args:
+            raw_xml: Original XML content
+            processed_xml: Processed XML content  
+            structured_text: Structured text from python-docx
+            filename: Document filename
+        """
+        try:
+            base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+            
+            # Save structured text for analysis
+            debug_text_path = f"test-data/test-results/debug-{base_name}-structured.txt"
+            with open(debug_text_path, 'w', encoding='utf-8') as f:
+                f.write("=== STRUCTURED TEXT EXTRACTED WITH python-docx ===\n\n")
+                lines = structured_text.split('\n')
+                for i, line in enumerate(lines, 1):
+                    f.write(f"{i:4d}: {line}\n")
+                f.write(f"\n=== SUMMARY ===\n")
+                f.write(f"Total lines: {len(lines)}\n")
+                f.write(f"Total characters: {len(structured_text)}\n")
+            
+            # Save processed XML for comparison
+            debug_xml_path = f"test-data/test-results/debug-{base_name}-processed.xml"
+            with open(debug_xml_path, 'w', encoding='utf-8') as f:
+                f.write("=== PROCESSED XML FROM docxtpl ===\n\n")
+                f.write(processed_xml)
+            
+            logger.info(f"Debug files saved: {debug_text_path}, {debug_xml_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save debug output: {str(e)}")
+
+    def _create_basic_input_data(self, structured_text: str, filename: str) -> dict:
+        """
+        Create basic input data for error reports (without docxtpl processing).
         
-        # Check for complex expressions
-        variable_matches = self.tag_patterns['variable'].finditer(content)
-        for match in variable_matches:
-            var_content = match.group(0)
-            if len(var_content) > 50:  # Arbitrary threshold for complexity
-                line_num = content[:match.start()].count('\n') + 1
-                warnings.append(LintWarning(
-                    line_number=line_num,
-                    warning_type=LintWarningType.COMPLEX_EXPRESSION,
-                    message="Complex variable expression detected",
-                    context=var_content,
-                    suggestion="Consider simplifying expression or using intermediate variables"
-                ))
+        Args:
+            structured_text: Structured text from python-docx
+            filename: Document filename
+            
+        Returns:
+            Basic input data dictionary
+        """
+        lines = structured_text.split('\n')
+        return {
+            "filename": filename,
+            "structured_text_size": len(structured_text),
+            "structured_text_lines": len(lines),
+            "structured_text_preview": structured_text[:500] + "..." if len(structured_text) > 500 else structured_text,
+            "structured_text_full": structured_text,
+            "extraction_method": "python-docx only",
+            "processing_method": "plaintext syntax analysis"
+        }
+
+    async def _save_debug_output_basic(self, structured_text: str, filename: str) -> None:
+        """
+        Save basic debug output for syntax error analysis.
         
-        # Check for suspicious patterns
-        suspicious_patterns = [
-            (r'{{{[^}]*}}}', "Triple braces detected"),
-            (r'{%\s*{[^}]*}\s*%}', "Mixed tag syntax"),
-            (r'{{[^}]*{{[^}]*}}', "Nested double braces in variable"),
-            (r'{\s+{[^}]*}\s+}', "Spaces between braces")
+        Args:
+            structured_text: Structured text from python-docx
+            filename: Document filename
+        """
+        try:
+            base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+            
+            # Save structured text for analysis
+            debug_text_path = f"test-data/test-results/debug-{base_name}-syntax-error.txt"
+            with open(debug_text_path, 'w', encoding='utf-8') as f:
+                f.write("=== SYNTAX ERROR ANALYSIS - STRUCTURED TEXT ===\n\n")
+                lines = structured_text.split('\n')
+                for i, line in enumerate(lines, 1):
+                    f.write(f"{i:4d}: {line}\n")
+                f.write(f"\n=== SUMMARY ===\n")
+                f.write(f"Total lines: {len(lines)}\n")
+                f.write(f"Total characters: {len(structured_text)}\n")
+                f.write(f"Analysis: Syntax errors found in plaintext, docxtpl processing skipped\n")
+            
+            logger.info(f"Basic debug file saved: {debug_text_path}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save basic debug output: {str(e)}")
+
+    async def _save_intermediate_json(self, json_result: dict, filename: str) -> None:
+        """
+        Save intermediate JSON result to file for analysis.
+        
+        Args:
+            json_result: The complete JSON result from linting
+            filename: Document filename for naming the output file
+        """
+        try:
+            base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+            
+            # Save JSON result
+            json_file = f"test-data/test-results/intermediate-{base_name}-linting-result.json"
+            
+            import json
+            with open(json_file, 'w', encoding='utf-8') as f:
+                json.dump(json_result, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Intermediate JSON result saved to {json_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save intermediate JSON result: {str(e)}")
+
+    async def _save_intermediate_markdown(self, lint_result: 'LintResult', filename: str) -> None:
+        """
+        Save intermediate markdown for debugging table formatting issues.
+        
+        Args:
+            lint_result: The LintResult object
+            filename: Document filename for naming the output file
+        """
+        try:
+            from services.markdown_formatter import create_lint_report_markdown
+            
+            base_name = filename.rsplit('.', 1)[0] if '.' in filename else filename
+            
+            # Generate markdown
+            markdown_content = create_lint_report_markdown(lint_result, filename)
+            
+            # Save markdown file
+            markdown_file = f"test-data/test-results/debug-{base_name}-report.md"
+            with open(markdown_file, 'w', encoding='utf-8') as f:
+                f.write(markdown_content)
+            
+            logger.info(f"Debug markdown saved to {markdown_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save debug markdown: {str(e)}")
+
+    def _find_unmatched_tags(self, structured_text: str, filename: str) -> List[dict]:
+        """
+        Step 6: Apply custom logic to find unmatched pair tags with accurate line numbers.
+        
+        Args:
+            structured_text: Structured text from python-docx
+            filename: Document filename for error reporting
+            
+        Returns:
+            List of syntax error dictionaries
+        """
+        syntax_errors = []
+        
+        # Split structured text into lines - this preserves document structure
+        lines = structured_text.split('\n')
+        
+        # Note: Removed overly aggressive malformed tag detection
+        # docxtpl syntax like {%p if ...%}, {%tr for ...%} etc. is actually VALID
+        
+        # Join all lines to handle template blocks that span multiple lines
+        full_text = '\n'.join(lines)
+        
+        # Use Jinja2 to parse and find actual syntax errors
+        # Replace docxtpl extension tags with regular Jinja2 equivalent
+        import re
+        preprocessed_text = full_text
+        docxtpl_patterns = [
+            (r'{%\s*p\s+([^%]*?)%}', r'{% \1 %}'),  # {%p if ...%} -> {% if ...%}
+            (r'{%\s*tr\s+([^%]*?)%}', r'{% \1 %}'), # {%tr for ...%} -> {% for ...%}
+            (r'{%\s*tc\s+([^%]*?)%}', r'{% \1 %}'), # {%tc if ...%} -> {% if ...%}
+            (r'{%\s*r\s+([^%]*?)%}', r'{% \1 %}'),  # {%r if ...%} -> {% if ...%}
         ]
         
-        for pattern, description in suspicious_patterns:
-            matches = re.finditer(pattern, content)
-            for match in matches:
-                line_num = content[:match.start()].count('\n') + 1
-                warnings.append(LintWarning(
-                    line_number=line_num,
-                    warning_type=LintWarningType.SUSPICIOUS_SYNTAX,
-                    message=f"Suspicious syntax: {description}",
-                    context=match.group(0),
-                    suggestion="Review syntax for correctness"
-                ))
+        for pattern, replacement in docxtpl_patterns:
+            preprocessed_text = re.sub(pattern, replacement, preprocessed_text)
         
-        logger.debug(f"Quality check generated {len(warnings)} warnings")
-        return warnings
+        try:
+            from jinja2 import Environment, TemplateSyntaxError
+            env = Environment()
+            
+            # Try to parse the preprocessed template
+            env.from_string(preprocessed_text)
+            
+        except TemplateSyntaxError as e:
+            # Found a real syntax error - map it back to line numbers
+            error_line = e.lineno if e.lineno else 1
+            
+            # Find the problematic content around the error
+            text_lines = full_text.split('\n')
+            
+            # For "end of template" errors, find the actual unmatched opening tag
+            if error_line > len(text_lines) or "Unexpected end of template" in e.message:
+                # Look for unmatched opening tags by tracking nesting
+                error_content = "End of template - missing closing tag"
+                
+                # Track all opening and closing tags to find the unmatched one
+                stack = []  # Stack to track open tags: [(tag_type, line_number, line_content)]
+                
+                for i, line in enumerate(text_lines):
+                    line_num = i + 1
+                    
+                    # Check for opening tags (both standard and docxtpl)
+                    import re
+                    
+                    # Find all opening tags in this line
+                    opening_patterns = [
+                        (r'{%\s*if\s+', 'if'),
+                        (r'{%\s*for\s+', 'for'),
+                        (r'{%p\s+if\s+', 'if'),  # docxtpl if
+                        (r'{%tr\s+for\s+', 'for'),  # docxtpl for
+                        (r'{%tc\s+if\s+', 'if'),  # docxtpl table cell if
+                        (r'{%r\s+if\s+', 'if'),  # docxtpl row if
+                    ]
+                    
+                    for pattern, tag_type in opening_patterns:
+                        if re.search(pattern, line):
+                            stack.append((tag_type, line_num, line.strip()))
+                    
+                    # Check for closing tags
+                    if '{% endif %}' in line or '{%p endif %}' in line:
+                        if stack and stack[-1][0] == 'if':
+                            stack.pop()
+                    elif '{% endfor %}' in line or '{%tr endfor %}' in line:
+                        if stack and stack[-1][0] == 'for':
+                            stack.pop()
+                
+                # If there are unmatched tags, report the first unmatched one
+                if stack:
+                    tag_type, line_num, line_content = stack[-1]  # Last unmatched tag
+                    error_line = line_num
+                    error_content = line_content
+            else:
+                error_content = text_lines[error_line - 1] if error_line <= len(text_lines) else "Unknown"
+            
+            syntax_errors.append({
+                'type': 'template_syntax_error',
+                'line_number': error_line,
+                'line_content': error_content.strip(),
+                'message': f"Template syntax error: {e.message}",
+                'suggestion': "Check for unmatched tags, missing endif/endfor statements, or invalid Jinja2 syntax"
+            })
+            
+            return syntax_errors
+            
+        except Exception as e:
+            # Handle other parsing errors (like unknown tags)
+            if 'unknown tag' in str(e).lower():
+                # This might be a docxtpl extension tag, try a simpler approach
+                pass
+            else:
+                syntax_errors.append({
+                    'type': 'parsing_error',
+                    'line_number': 1,
+                    'line_content': 'Full template',
+                    'message': f"Template parsing error: {str(e)}",
+                    'suggestion': "Check template syntax and structure"
+                })
+                return syntax_errors
+        
+        # If we get here, no major syntax errors were found by Jinja2
+        # The template is syntactically valid, so return no errors
+        return syntax_errors
 
-    def _count_jinja_tags(self, content: str) -> int:
-        """Count the number of Jinja tags in the template."""
-        return len(self.tag_patterns['full_tag'].findall(content))
-
-    def _get_line_context(self, content: str, line_number: Optional[int], context_lines: int = 2) -> Optional[str]:
+    def _split_xml_into_logical_lines(self, xml_content: str) -> List[str]:
         """
-        Get context lines around a specific line number.
+        Split XML content into logical lines for accurate line number reporting.
         
-        Args:
-            content: Template content
-            line_number: Target line number
-            context_lines: Number of lines before and after to include
+        This attempts to preserve document structure by splitting on:
+        1. XML paragraph boundaries (<w:p>)
+        2. XML table row boundaries (<w:tr>)
+        3. Line break tags (<w:br>)
+        4. Actual newlines in the XML
+        """
+        # Split by meaningful XML boundaries that represent document structure
+        logical_lines = []
+        
+        # First split by paragraph boundaries
+        paragraph_parts = re.split(r'(<w:p[^>]*>|</w:p>)', xml_content)
+        
+        for part in paragraph_parts:
+            if not part.strip():
+                continue
+                
+            # Further split by table row boundaries
+            row_parts = re.split(r'(<w:tr[^>]*>|</w:tr>)', part)
+            
+            for row_part in row_parts:
+                if not row_part.strip():
+                    continue
+                    
+                # Split by line breaks and actual newlines
+                line_parts = re.split(r'(<w:br[^>]*/>|\n)', row_part)
+                
+                for line_part in line_parts:
+                    if line_part.strip():
+                        logical_lines.append(line_part)
+        
+        return logical_lines
+
+    def _extract_jinja_tags(self, line_content: str) -> List[dict]:
+        """
+        Extract all Jinja2 tags from a line with their types and names.
             
         Returns:
-            Context string or None if line_number is None
+            List of tag dictionaries with type, name, and content
         """
-        if line_number is None:
-            return None
+        tags = []
         
-        lines = content.split('\n')
-        start = max(0, line_number - context_lines - 1)
-        end = min(len(lines), line_number + context_lines)
+        # Pattern for block tags (if, for, etc.)
+        block_pattern = r'{%\s*(\w+)(?:\s+([^%]*))?\s*%}'
         
-        context = []
-        for i in range(start, end):
-            marker = " -> " if i == line_number - 1 else "    "
-            context.append(f"{marker}{i+1}: {lines[i]}")
+        for match in re.finditer(block_pattern, line_content):
+            tag_name = match.group(1)
+            tag_args = match.group(2) or ''
+            full_content = match.group(0)
+            
+            if tag_name.startswith('end'):
+                tag_type = 'block_end'
+            elif tag_name in self.paired_tags:
+                tag_type = 'block_start'
+            else:
+                tag_type = 'standalone'
+            
+            tags.append({
+                'type': tag_type,
+                'name': tag_name,
+                'args': tag_args.strip(),
+                'content': full_content,
+                'start_pos': match.start(),
+                'end_pos': match.end()
+            })
         
-        return '\n'.join(context)
+        return tags
 
-    def _calculate_completeness_score(self, content: str, errors: int, warnings: int, tags: int) -> float:
+    def _find_missing_variables(self, doc_template: DocxTemplate, structured_text: str) -> List[dict]:
         """
-        Calculate a completeness/quality score for the template.
+        Step 7: Find missing variables using docxtpl's built-in method.
         
         Args:
-            content: Template content
-            errors: Number of errors
-            warnings: Number of warnings
-            tags: Number of Jinja tags
+            doc_template: DocxTemplate instance
+            structured_text: Structured text content
             
         Returns:
-            Score from 0-100
+            List of missing variable information
         """
-        if not content.strip():
-            return 0.0
+        try:
+            # Use docxtpl's method to find undeclared variables
+            undeclared_vars = doc_template.get_undeclared_template_variables(self.env)
+            
+            missing_vars = []
+            for var in undeclared_vars:
+                # Try to find the line number where this variable is used
+                line_number = self._find_variable_line_number(var, structured_text)
+                
+                missing_vars.append({
+                    'variable': var,
+                    'line_number': line_number,
+                    'type': 'undefined_variable'
+                })
+            
+            return missing_vars
+            
+        except Exception as e:
+            logger.warning(f"Failed to find missing variables: {str(e)}")
+            return []
+
+    def _find_variable_line_number(self, variable: str, structured_text: str) -> Optional[int]:
+        """
+        Find the line number where a variable is first used.
         
-        # Base score
-        score = 100.0
+        Args:
+            variable: Variable name to search for
+            structured_text: Structured text content
+            
+        Returns:
+            Line number or None if not found
+        """
+        lines = structured_text.split('\n')
         
-        # Subtract for errors (more impactful)
-        score -= (errors * 15)
+        # Pattern to match variable usage
+        var_pattern = r'{{\s*' + re.escape(variable) + r'(?:\s*\|[^}]*)?\s*}}'
         
-        # Subtract for warnings (less impactful)
-        score -= (warnings * 5)
+        for line_num, line_content in enumerate(lines, 1):
+            if re.search(var_pattern, line_content):
+                return line_num
         
-        # Bonus for having Jinja tags (shows it's actually a template)
-        if tags > 0:
-            score += min(tags * 2, 10)  # Max 10 bonus points
+        return None
+
+    def _create_metadata(self, filename: str, start_time: float, processing_time: float) -> dict:
+        """Create metadata for the JSON result."""
+        return {
+            "filename": filename,
+            "linter_version": "2.0.0",
+            "architecture": "docxtpl-based",
+            "timestamp": time.time(),
+            "processing_time_ms": round(processing_time, 2)
+        }
+
+    def _create_json_result(
+        self, 
+        metadata: dict, 
+        input_data: dict, 
+        syntax_errors: List[dict], 
+        missing_variables: List[dict],
+        processing_time: float
+    ) -> dict:
+        """Create the structured JSON result."""
+        return {
+            "metadata": metadata,
+            "input_data": input_data,
+            "syntax_errors": syntax_errors,
+            "missing_variables": missing_variables,
+            "processing_info": {
+                "total_errors": len(syntax_errors),
+                "total_warnings": len(missing_variables),
+                "processing_time_ms": round(processing_time, 2),
+                "success": len(syntax_errors) == 0
+            }
+        }
+
+    def _convert_to_lint_error(self, error_dict: dict) -> LintError:
+        """Convert dictionary error to LintError object."""
+        return LintError(
+            line_number=error_dict.get('line_number'),
+            error_type=LintErrorType.SYNTAX_ERROR,
+            message=error_dict['message'],
+            context=error_dict.get('line_content'),
+            suggestion=error_dict.get('suggestion')
+        )
+
+    def _convert_warning_to_dict(self, warning: LintWarning) -> dict:
+        """Convert LintWarning to dictionary."""
+        return {
+            "type": warning.warning_type.value if warning.warning_type else "unknown",
+            "message": warning.message,
+            "line_number": warning.line_number,
+            "suggestion": warning.suggestion
+        }
+
+    def _convert_json_to_lint_result(
+        self, 
+        json_result: dict, 
+        errors: List[LintError], 
+        warnings: List[LintWarning],
+        structured_text: str,
+        options: LintOptions
+    ) -> LintResult:
+        """Convert JSON result back to traditional LintResult format."""
         
-        # Ensure score is within bounds
-        return max(0.0, min(100.0, score))
+        lines = structured_text.split('\n')
+        
+        # Create summary
+        summary = LintSummary(
+            total_errors=len(errors),
+            total_warnings=len(warnings),
+            template_size=len(structured_text),
+            lines_count=len(lines),
+            jinja_tags_count=len(re.findall(r'{[%{#].*?[%}#]}', structured_text)),
+            completeness_score=100.0 if len(errors) == 0 else max(0.0, 100.0 - (len(errors) * 20)),
+            processing_time_ms=json_result['processing_info']['processing_time_ms']
+        )
+        
+        # Create preview
+        preview = structured_text[:500] if len(structured_text) > 500 else structured_text
+        if len(structured_text) > 500:
+            preview += "..."
+        
+        success = len(errors) == 0 and (not options.fail_on_warnings or len(warnings) == 0)
+        
+        result = LintResult(
+            success=success,
+            errors=errors,
+            warnings=warnings,
+            summary=summary,
+            template_content=structured_text if options.verbose else None,
+            template_preview=preview
+        )
+        
+        # Store the JSON result for potential later use
+        result.json_result = json_result
+        
+        return result
+
+    def _create_error_result(self, exception: Exception, filename: str, start_time: float) -> LintResult:
+        """Create error result when linting fails."""
+        processing_time = (time.time() - start_time) * 1000
+        
+        error = LintError(
+            error_type=LintErrorType.DOCUMENT_ERROR,
+            message=f"Linting failed: {str(exception)}",
+            suggestion="Check document format and try again"
+        )
+        
+        summary = LintSummary(
+            total_errors=1,
+            total_warnings=0,
+            template_size=0,
+            lines_count=0,
+            jinja_tags_count=0,
+            completeness_score=0.0,
+            processing_time_ms=round(processing_time, 2)
+        )
+        
+        return LintResult(
+            success=False,
+            errors=[error],
+            warnings=[],
+            summary=summary,
+            template_content=None,
+            template_preview="Error: Could not process document"
+        )
+
+    async def export_json_result(self, lint_result: LintResult, output_path: str) -> bool:
+        """
+        Export the JSON result to a file.
+        
+        Args:
+            lint_result: LintResult containing json_result
+            output_path: Path to save JSON file
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if hasattr(lint_result, 'json_result'):
+                with open(output_path, 'w') as f:
+                    json.dump(lint_result.json_result, f, indent=2)
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to export JSON result: {str(e)}")
+            return False

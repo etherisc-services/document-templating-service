@@ -83,6 +83,7 @@ class LintResult(BaseModel):
     summary: LintSummary = Field(..., description="Summary statistics")
     template_content: Optional[str] = Field(None, description="Extracted template content")
     template_preview: Optional[str] = Field(None, description="First 500 characters of template")
+    json_result: Optional[dict] = Field(None, description="Structured JSON result from revised linter")
     
     @property
     def has_errors(self) -> bool:

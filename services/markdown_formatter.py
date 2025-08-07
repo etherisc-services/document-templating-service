@@ -152,14 +152,28 @@ class LintReportMarkdownFormatter:
             # Format template text with context
             template_text = "N/A"
             if hasattr(issue, 'context') and issue.context:
-                template_text = f"`{self._escape_markdown(issue.context[:50])}`"
-                if len(issue.context) > 50:
+                # Show more context for better readability (150 chars instead of 50)
+                context_text = issue.context[:150]
+                escaped_context = self._escape_markdown(context_text)
+                template_text = f"<code>{escaped_context}</code>"
+                if len(issue.context) > 150:
                     template_text += "..."
             
-            # Format description with type and suggestion
-            description = f"**{issue.error_type if hasattr(issue, 'error_type') else issue.warning_type}**<br/>"
-            description += self._escape_markdown(issue.message)
+            # Format description with clean message
+            if hasattr(issue, 'error_type'):
+                # For errors, show the error type and message
+                description = f"**{issue.error_type}**<br/>"
+                description += self._escape_markdown(issue.message)
+            else:
+                # For warnings, just show the message without enum prefix
+                description = "**"
+                if issue.message and issue.message.startswith("Undefined variable:"):
+                    description += issue.message
+                else:
+                    description += issue.message or "Warning"
+                description += "**"
             
+            # Add suggestion for both errors and warnings
             if issue.suggestion:
                 description += f"<br/>💡 *{self._escape_markdown(issue.suggestion)}*"
             
@@ -191,14 +205,18 @@ Your template is ready for production use!
         return preview
     
     def _escape_markdown(self, text: str) -> str:
-        """Escape special markdown characters."""
+        """Escape special markdown characters for markdown tables."""
         if not text:
             return ""
         
-        # Escape common markdown characters
-        chars_to_escape = ['|', '*', '_', '`', '\\', '[', ']', '(', ')', '#', '+', '-', '.', '!']
+        # For markdown tables, pipes are the most critical to escape properly
+        # Escape backslashes first, then other characters
+        text = text.replace('\\', '\\\\')  # Escape existing backslashes first
+        text = text.replace('|', '\\|')   # Escape pipes for table formatting
         
-        for char in chars_to_escape:
+        # Escape other markdown characters
+        other_chars = ['*', '_', '`', '[', ']', '(', ')', '#', '+', '-', '.', '!']
+        for char in other_chars:
             text = text.replace(char, f'\\{char}')
         
         return text

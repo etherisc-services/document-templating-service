@@ -1,0 +1,70 @@
+{
+  "farmer": {
+    "id": "622ce1e1-1342-4ae0-bc95-e9343e05d692",
+    "farmerCode": "FMR1753987588392126",
+    "name": "Tariro Mudenda",
+    "phone": "+263 76 911 8617",
+    "countryCode": "ZW",
+    "latitude": -18.97966353241836,
+    "longitude": 31.9450316961498,
+    "aez": 5,
+    "administrativeLevels": {},
+    "otherActivities": [],
+    "area": 4.3,
+    "paymentDetails": [
+      {
+        "type": "bank_transfer",
+        "currency": "USD",
+        "bank_name": "Stanbic Bank",
+        "account_name": "Taira Mudenda",
+        "account_number": "12341234",
+        "branch_name_or_code": "Branch code"
+      }
+    ],
+    "proofOfStake": [
+      {
+        "id": "b456fa56-b36d-4d5a-bb69-9cf36ba207c8",
+        "url": "/api/documents/download/documents/1754423969909_b456fa56-b36d-4d5a-bb69-9cf36ba207c8",
+        "size": 52718,
+        "type": "proof_of_stake",
+        "filename": "4156450_CR (1).pdf",
+        "mimeType": "application/pdf",
+        "uploadedAt": "2025-08-05T19:59:29.915Z"
+      }
+    ],
+    "county": "Mutare",
+    "ward": "Ward 10",
+    "crop": "Sesame",
+    "organizationIds": [
+      "36596e50-2531-4645-b864-a66ca6422c25",
+      "b085b62f-77ff-46aa-a75c-8f0a0bf06b22"
+    ],
+    "kycStatus": "PENDING",
+    "isActive": true,
+    "createdAt": "2025-07-31T18:46:28.393Z",
+    "updatedAt": "2025-08-05T19:59:31.307Z"
+  },
+  "organization": {
+    "id": "3cff2706-10ed-4504-8495-b7b58fcafc0f",
+    "name": "MyUbuntu Insurance",
+    "code": "default"
+  },
+  "quotes": [
+    {
+      "id": "db820735-4db8-4f47-9a90-c8cc9ff06692",
+      "number": "Q2025000016",
+      "status": "DRAFT",
+      "premium": "0",
+      "coverage": "0",
+      "createdAt": "2025-08-01T12:21:37.154Z"
+    }
+  ],
+  "policies": [],
+  "summary": {
+    "totalQuotes": 1,
+    "activePolicies": 0,
+    "totalCoverage": 0,
+    "totalPremium": 0
+  },
+  "generatedAt": "2025-08-07T11:29:19.721Z"
+}
