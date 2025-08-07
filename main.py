@@ -166,7 +166,8 @@ from pydantic import BaseModel
 
 # Import linter service and models
 from services.docx_linter import DocxJinjaLinterService
-from models.schemas import LintOptions, LintResult
+from services.markdown_formatter import create_lint_report_markdown
+from models.schemas import LintOptions, LintResult, LintResponseFormat
 
 class ImageData(BaseModel):
     """Model for inline image data"""
@@ -417,7 +418,7 @@ async def healthcheck():
     return SERVICE_STATUS
 
 
-@app.post('/api/v1/lint-docx-template', response_model=LintResult)
+@app.post('/api/v1/lint-docx-template')
 async def lint_docx_template(
     document: UploadFile = File(..., description="DocX file containing Jinja2 template to lint"),
     options: LintOptions = Body(default=LintOptions(), description="Linting configuration options")
@@ -431,11 +432,11 @@ async def lint_docx_template(
     - Template structure and nesting
     - Code quality and best practices
     
-    Returns comprehensive linting results including:
-    - List of errors found
-    - List of warnings and suggestions
-    - Template quality metrics
-    - Processing statistics
+    Response formats:
+    - PDF (default): Professional linting report as PDF document
+    - JSON (optional): Structured data for programmatic use
+    
+    Set options.response_format = "json" for JSON response.
     """
     try:
         # Input validation
@@ -496,7 +497,12 @@ async def lint_docx_template(
                    f"{lint_result.summary.total_errors} errors, "
                    f"{lint_result.summary.total_warnings} warnings")
         
-        return lint_result
+        # Return response based on requested format
+        if options.response_format == LintResponseFormat.JSON:
+            return lint_result
+        else:
+            # Generate PDF report
+            return await _generate_lint_pdf_report(lint_result, document.filename)
         
     except FileProcessingError as e:
         logger.error(f"File processing error during linting: {e.message}")
@@ -516,6 +522,153 @@ async def lint_docx_template(
             }
         )
         return create_error_response(error, 500)
+
+
+async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str) -> FileResponse:
+    """
+    Generate a PDF report from linting results.
+    
+    Args:
+        lint_result: The linting results
+        document_name: Name of the original document
+        
+    Returns:
+        FileResponse with the PDF report
+    """
+    try:
+        # Create markdown report
+        markdown_content = create_lint_report_markdown(lint_result, document_name)
+        
+        # Ensure temp directory exists
+        os.makedirs('temp', exist_ok=True)
+        
+        # Create temporary markdown file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, dir='temp') as md_file:
+            md_file.write(markdown_content)
+            md_file_path = md_file.name
+        
+        # Generate PDF filename
+        base_name = os.path.splitext(document_name)[0]
+        pdf_filename = f"{base_name}_lint_report.pdf"
+        pdf_file_path = f"temp/{pdf_filename}"
+        
+        # Convert to PDF using Gotenberg
+        gotenberg_url = get_env('GOTENBERG_API_URL')
+        if not gotenberg_url:
+            raise PDFConversionError(
+                message="Gotenberg service URL not configured",
+                error_type="gotenberg_not_configured",
+                details={"env_var": "GOTENBERG_API_URL"}
+            )
+        
+        resource_url = f'{gotenberg_url}/forms/chromium/convert/markdown'
+        
+        logger.info(f"Converting lint report to PDF via Gotenberg: {resource_url}")
+        
+        with open(md_file_path, 'rb') as md_file:
+            files = {'files': (os.path.basename(md_file_path), md_file, 'text/markdown')}
+            
+            # Make request to Gotenberg with timeout
+            response = requests.post(
+                url=resource_url,
+                files=files,
+                timeout=30  # 30 second timeout for reports
+            )
+        
+        # Check Gotenberg response
+        if response.status_code != 200:
+            error_details = {
+                "gotenberg_url": resource_url,
+                "status_code": response.status_code,
+                "response_headers": dict(response.headers)
+            }
+            
+            # Try to extract error message from response
+            try:
+                if response.headers.get('content-type', '').startswith('application/json'):
+                    error_data = response.json()
+                    error_details["error_data"] = error_data
+                else:
+                    error_details["response_text"] = response.text[:500]
+            except:
+                error_details["response_text"] = response.text[:500] if response.text else "No response text"
+            
+            raise PDFConversionError(
+                message=f"Gotenberg linting report conversion failed with status {response.status_code}",
+                error_type="gotenberg_conversion_failed",
+                details=error_details
+            )
+        
+        # Validate response content
+        if not response.content or not response.content.startswith(b'%PDF'):
+            raise PDFConversionError(
+                message="Gotenberg returned invalid PDF for linting report",
+                error_type="invalid_pdf_response",
+                details={
+                    "gotenberg_url": resource_url,
+                    "content_type": response.headers.get('content-type'),
+                    "content_start": response.content[:100].decode('utf-8', errors='ignore') if response.content else "Empty"
+                }
+            )
+        
+        # Save PDF response
+        async with aiofiles.open(pdf_file_path, 'wb') as out_file:
+            await out_file.write(response.content)
+        
+        logger.info(f"Lint report PDF generated successfully: {pdf_file_path} ({len(response.content)} bytes)")
+        
+        # Clean up markdown file
+        try:
+            os.unlink(md_file_path)
+        except:
+            pass
+        
+        # Return PDF file
+        return FileResponse(
+            pdf_file_path,
+            media_type='application/pdf',
+            filename=pdf_filename
+        )
+        
+    except Exception as e:
+        # Clean up files on error
+        try:
+            if 'md_file_path' in locals() and os.path.exists(md_file_path):
+                os.unlink(md_file_path)
+            if 'pdf_file_path' in locals() and os.path.exists(pdf_file_path):
+                os.unlink(pdf_file_path)
+        except:
+            pass
+        
+        logger.error(f"Failed to generate lint report PDF: {str(e)}")
+        
+        # Return JSON fallback if PDF generation fails
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "pdf_generation_failed",
+                "message": f"Could not generate PDF report: {str(e)}",
+                "fallback_data": {
+                    "success": lint_result.success,
+                    "errors": [
+                        {
+                            "line_number": error.line_number,
+                            "error_type": error.error_type,
+                            "message": error.message,
+                            "suggestion": error.suggestion
+                        }
+                        for error in lint_result.errors
+                    ],
+                    "summary": {
+                        "total_errors": lint_result.summary.total_errors,
+                        "total_warnings": lint_result.summary.total_warnings,
+                        "completeness_score": lint_result.summary.completeness_score
+                    }
+                }
+            }
+        )
+
 
 @app.post('/api/v1/process-template-document')
 async def process_document_template(

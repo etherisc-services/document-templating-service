@@ -2,14 +2,14 @@ name: Build and Deploy GitHub Pages
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
     paths:
-      - 'docs/**'
-      - '_config.yml'
-      - 'Gemfile*'
-      - 'index.md'
-      - '.lycheerc.toml'
-      - '.github/workflows/pages.yml'
+      - "docs/**"
+      - "_config.yml"
+      - "Gemfile*"
+      - "index.md"
+      - ".lycheerc.toml"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
@@ -31,7 +31,7 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '3.1'
+          ruby-version: "3.1"
           bundler-cache: true
           cache-version: 0
 
@@ -134,4 +134,4 @@ jobs:
           echo "📊 Deployment Summary:"
           if [ -f deployment-link-check.md ]; then
             grep -E "🔍 Total|✅ Successful|🚫 Errors" deployment-link-check.md || echo "Deployment report summary not available"
-          fi 
+          fi

@@ -47,7 +47,20 @@ Validates a DocX file containing Jinja2 templates.
 }
 ```
 
-#### Response Format
+#### Response Formats
+
+The linter endpoint supports two response formats:
+
+#### 📄 PDF Report (Default)
+Professional linting report as a PDF document with:
+- Document metadata and validation status
+- Summary table with error/warning counts  
+- Detailed error table with line numbers and descriptions
+- Template preview with highlighted issues
+- Formatted for easy reading and sharing
+
+#### 📋 JSON Data (Optional)
+Structured data response for programmatic use:
 
 ```json
 {
@@ -109,19 +122,33 @@ Validates a DocX file containing Jinja2 templates.
 
 ## Usage Examples
 
-### Basic Linting
+### Basic PDF Linting (Default)
 
 ```bash
-curl -X POST 'http://localhost:8000/api/v1/lint-docx-template' \
-     -F 'document=@template.docx'
-```
-
-### Advanced Options
-
-```bash
+# Returns PDF report
 curl -X POST 'http://localhost:8000/api/v1/lint-docx-template' \
      -F 'document=@template.docx' \
-     -F 'options={"verbose": true, "max_line_length": 100, "fail_on_warnings": true}'
+     -o 'lint_report.pdf'
+```
+
+### JSON Response Option
+
+```bash
+# Returns JSON data
+curl -X POST 'http://localhost:8000/api/v1/lint-docx-template' \
+     -F 'document=@template.docx' \
+     -F 'options={"response_format": "json", "verbose": true}' \
+     | jq '.summary'
+```
+
+### Advanced PDF Options
+
+```bash
+# Detailed PDF report with custom settings
+curl -X POST 'http://localhost:8000/api/v1/lint-docx-template' \
+     -F 'document=@template.docx' \
+     -F 'options={"verbose": true, "max_line_length": 100}' \
+     -o 'detailed_lint_report.pdf'
 ```
 
 ### Python Usage
@@ -130,15 +157,34 @@ curl -X POST 'http://localhost:8000/api/v1/lint-docx-template' \
 import httpx
 import asyncio
 
-async def lint_template():
+# Get PDF report (default)
+async def get_pdf_report():
     async with httpx.AsyncClient() as client:
         with open('template.docx', 'rb') as f:
-            files = {
-                'document': ('template.docx', f, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-            }
+            files = {'document': ('template.docx', f, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
             response = await client.post(
                 'http://localhost:8000/api/v1/lint-docx-template',
                 files=files
+            )
+            
+            if response.status_code == 200 and response.headers.get('content-type') == 'application/pdf':
+                with open('lint_report.pdf', 'wb') as f:
+                    f.write(response.content)
+                print("✅ PDF report saved as lint_report.pdf")
+            else:
+                print("❌ Failed to get PDF report")
+
+# Get JSON data
+async def get_json_data():
+    async with httpx.AsyncClient() as client:
+        with open('template.docx', 'rb') as f:
+            files = {'document': ('template.docx', f, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
+            data = {'options': '{"response_format": "json", "verbose": true}'}
+            
+            response = await client.post(
+                'http://localhost:8000/api/v1/lint-docx-template',
+                files=files,
+                data=data
             )
             result = response.json()
             
@@ -150,7 +196,9 @@ async def lint_template():
                 for error in result['errors']:
                     print(f"  Line {error['line_number']}: {error['message']}")
 
-asyncio.run(lint_template())
+# Run examples
+asyncio.run(get_pdf_report())
+asyncio.run(get_json_data())
 ```
 
 ## Supported Jinja Tags

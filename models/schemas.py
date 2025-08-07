@@ -7,6 +7,12 @@ from typing import Dict, List, Optional, Any
 from enum import Enum
 
 
+class LintResponseFormat(str, Enum):
+    """Response format options for linting."""
+    PDF = "pdf"
+    JSON = "json"
+
+
 class LintOptions(BaseModel):
     """Configuration options for linting behavior."""
     verbose: bool = Field(False, description="Enable verbose output with additional details")
@@ -15,6 +21,7 @@ class LintOptions(BaseModel):
     fail_on_warnings: bool = Field(False, description="Treat warnings as errors")
     check_tag_matching: bool = Field(True, description="Check for matching Jinja tag pairs")
     check_nested_structure: bool = Field(True, description="Validate nested tag structure")
+    response_format: LintResponseFormat = Field(LintResponseFormat.PDF, description="Response format: PDF report or JSON data")
 
 
 class LintErrorType(str, Enum):
