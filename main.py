@@ -938,8 +938,26 @@ async def process_document_template(
             
         except Exception as e:
             logger.error(f"Template linting failed: {str(e)}")
-            # Don't block processing on linting errors - just log and continue
-            logger.warning("Continuing with template processing despite linting failure")
+            logger.error(f"Linting error traceback: {traceback.format_exc()}")
+            
+            # Clean up uploaded file
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            
+            # For linting failures, return JSON error response as fallback
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "status": "linting_service_error",
+                    "message": f"Template linting service failed: {str(e)}",
+                    "error_type": "linting_service_error",
+                    "details": {
+                        "filename": file.filename,
+                        "linting_error": str(e),
+                        "suggestion": "The template likely has validation errors. Check template syntax and try again."
+                    }
+                }
+            )
         
         # Stage 2: Template Loading and Image Processing
         try:
