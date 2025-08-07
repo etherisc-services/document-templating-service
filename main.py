@@ -542,11 +542,39 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         # Ensure temp directory exists
         os.makedirs('temp', exist_ok=True)
         
-        # Create temporary markdown file
+        # Create temporary markdown file and HTML wrapper for Gotenberg
         import tempfile
+        
+        # Create markdown file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, dir='temp') as md_file:
             md_file.write(markdown_content)
             md_file_path = md_file.name
+            md_filename = os.path.basename(md_file_path)
+        
+        # Create HTML wrapper file for Gotenberg markdown conversion
+        html_wrapper = f'''<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>DocX Template Linting Report</title>
+    <style>
+      body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 40px; }}
+      table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+      th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+      th {{ background-color: #f5f5f5; }}
+      code {{ background-color: #f5f5f5; padding: 2px 4px; border-radius: 3px; }}
+      pre {{ background-color: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; }}
+      .page-break {{ page-break-before: always; }}
+    </style>
+  </head>
+  <body>
+    {{{{ toHTML "{md_filename}" }}}}
+  </body>
+</html>'''
+        
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, dir='temp') as html_file:
+            html_file.write(html_wrapper)
+            html_file_path = html_file.name
         
         # Generate PDF filename
         base_name = os.path.splitext(document_name)[0]
@@ -567,8 +595,12 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         logger.info(f"Converting lint report to PDF via Gotenberg: {resource_url}")
         logger.debug(f"Markdown content length: {len(markdown_content)} characters")
         
-        with open(md_file_path, 'rb') as md_file:
-            files = {'files': ('index.html', md_file, 'text/markdown')}
+        # Send both HTML wrapper and markdown file to Gotenberg
+        with open(html_file_path, 'rb') as html_file, open(md_file_path, 'rb') as md_file:
+            files = [
+                ('files', ('index.html', html_file, 'text/html')),
+                ('files', (md_filename, md_file, 'text/markdown'))
+            ]
             
             # Make request to Gotenberg with timeout
             response = requests.post(
@@ -619,9 +651,10 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         
         logger.info(f"Lint report PDF generated successfully: {pdf_file_path} ({len(response.content)} bytes)")
         
-        # Clean up markdown file
+        # Clean up temporary files
         try:
             os.unlink(md_file_path)
+            os.unlink(html_file_path)
         except:
             pass
         
@@ -637,6 +670,8 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         try:
             if 'md_file_path' in locals() and os.path.exists(md_file_path):
                 os.unlink(md_file_path)
+            if 'html_file_path' in locals() and os.path.exists(html_file_path):
+                os.unlink(html_file_path)
             if 'pdf_file_path' in locals() and os.path.exists(pdf_file_path):
                 os.unlink(pdf_file_path)
         except:

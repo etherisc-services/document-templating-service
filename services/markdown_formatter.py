@@ -47,7 +47,7 @@ class LintReportMarkdownFormatter:
         markdown_parts.append(self._create_summary(lint_result))
         
         # New page for detailed results
-        markdown_parts.append("\n\\pagebreak\n")
+        markdown_parts.append('\n<div class="page-break"></div>\n')
         
         # Detailed results section
         if lint_result.errors or lint_result.warnings:
@@ -57,7 +57,7 @@ class LintReportMarkdownFormatter:
         
         # Template preview if available
         if lint_result.template_preview:
-            markdown_parts.append("\n\\pagebreak\n")
+            markdown_parts.append('\n<div class="page-break"></div>\n')
             markdown_parts.append(self._create_template_preview(lint_result.template_preview))
         
         return "\n".join(markdown_parts)
