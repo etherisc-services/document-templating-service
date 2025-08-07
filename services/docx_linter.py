@@ -43,27 +43,31 @@ class DocxJinjaLinterService:
             lstrip_blocks=True
         )
         
-        # Jinja tag patterns for matching analysis
+        # Jinja tag patterns for matching analysis (including docxtpl extensions)
         self.tag_patterns = {
-            'block_start': re.compile(r'{%\s*(\w+)(?:\s+[^%]*)?%}'),
-            'block_end': re.compile(r'{%\s*end(\w+)\s*%}'),
+            'block_start': re.compile(r'{%\s*([ptr]?)\s*(\w+)(?:\s+[^%]*)?%}'),  # Include p, tr, tc, r prefixes
+            'block_end': re.compile(r'{%\s*([ptr]?)\s*end(\w+)\s*%}'),  # Include p, tr, tc, r prefixes
             'variable': re.compile(r'{{[^}]*}}'),
+            'richtext_variable': re.compile(r'{{r\s+[^}]*}}'),  # RichText variables
             'comment': re.compile(r'{#[^#]*#}'),
+            'docxtpl_comment': re.compile(r'{#[ptr]\s+[^#]*#}'),  # DocXTPL paragraph/row/cell comments
             'full_tag': re.compile(r'{[%{#][^}%#]*[%}#]}')
         }
         
-        # Tags that require matching end tags
+        # Tags that require matching end tags (excluding 'set' which doesn't need endset)
         self.paired_tags = {
-            'if', 'for', 'with', 'set', 'block', 'macro', 'call', 
+            'if', 'for', 'with', 'block', 'macro', 'call', 
             'filter', 'trans', 'pluralize', 'raw', 'autoescape'
         }
         
-        # Tags that are self-contained
+        # Tags that are self-contained (including docxtpl extensions)
         self.standalone_tags = {
-            'else', 'elif', 'endif', 'endfor', 'endwith', 'endset', 
-            'endblock', 'endmacro', 'endcall', 'endfilter', 'endtrans',
-            'endpluralize', 'endraw', 'endautoescape', 'include', 'import',
-            'from', 'extends', 'break', 'continue'
+            'else', 'elif', 'endif', 'endfor', 'endwith', 'endblock', 
+            'endmacro', 'endcall', 'endfilter', 'endtrans', 'endpluralize', 
+            'endraw', 'endautoescape', 'include', 'import', 'from', 'extends', 
+            'break', 'continue', 'set',  # 'set' is standalone, no endset needed
+            # DocXTPL-specific tags
+            'cellbg', 'colspan', 'hm', 'vm'  # DocXTPL special tags
         }
 
     async def lint_docx_file(
@@ -331,19 +335,22 @@ class DocxJinjaLinterService:
             
             # Process opening tags
             for match in block_starts:
-                tag_name = match.group(1).lower()
+                prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
+                tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
                 full_match = match.group(0)
                 
                 if tag_name in self.paired_tags:
                     tag_stack.append({
                         'tag': tag_name,
+                        'prefix': prefix,
                         'line': line_num,
                         'content': full_match.strip(),
                         'position': match.start()
                     })
                 elif tag_name not in self.standalone_tags:
-                    # Unknown tag
-                    errors.append(LintError(
+                    # Unknown tag (but don't flag docxtpl prefixed tags as unknown)
+                    if not prefix or prefix not in ['p', 'tr', 'tc', 'r']:
+                        errors.append(LintError(
                         line_number=line_num,
                         column=match.start(),
                         error_type=LintErrorType.SYNTAX_ERROR,
@@ -355,7 +362,8 @@ class DocxJinjaLinterService:
             
             # Process closing tags
             for match in block_ends:
-                end_tag_name = match.group(1).lower()
+                end_prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
+                end_tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
                 full_match = match.group(0)
                 
                 if not tag_stack:
@@ -373,30 +381,38 @@ class DocxJinjaLinterService:
                 
                 # Check if closing tag matches the most recent opening tag
                 expected_tag = tag_stack[-1]['tag']
-                if end_tag_name == expected_tag:
+                expected_prefix = tag_stack[-1].get('prefix', '')
+                if end_tag_name == expected_tag and end_prefix == expected_prefix:
                     tag_stack.pop()  # Correct match
                 else:
                     # Mismatched tags
                     opening_info = tag_stack[-1]
+                    expected_full = f"{expected_prefix}end{expected_tag}" if expected_prefix else f"end{expected_tag}"
+                    found_full = f"{end_prefix}end{end_tag_name}" if end_prefix else f"end{end_tag_name}"
                     errors.append(LintError(
                         line_number=line_num,
                         column=match.start(),
                         error_type=LintErrorType.MISMATCHED_TAG,
-                        message=f"Expected 'end{expected_tag}' but found 'end{end_tag_name}'",
+                        message=f"Expected '{expected_full}' but found '{found_full}'",
                         context=line.strip(),
                         tag_name=end_tag_name,
-                        suggestion=f"Change to {{% end{expected_tag} %}} or check tag nesting (opened at line {opening_info['line']})"
+                        suggestion=f"Change to {{% {expected_full} %}} or check tag nesting (opened at line {opening_info['line']})"
                     ))
         
         # Check for unclosed tags
         for unclosed_tag in tag_stack:
+            tag_prefix = unclosed_tag.get('prefix', '')
+            tag_name = unclosed_tag['tag']
+            full_tag = f"{tag_prefix}{tag_name}" if tag_prefix else tag_name
+            close_tag = f"{tag_prefix}end{tag_name}" if tag_prefix else f"end{tag_name}"
+            
             errors.append(LintError(
                 line_number=unclosed_tag['line'],
                 error_type=LintErrorType.UNCLOSED_TAG,
-                message=f"Unclosed '{unclosed_tag['tag']}' tag",
+                message=f"Unclosed '{full_tag}' tag",
                 context=unclosed_tag['content'],
-                tag_name=unclosed_tag['tag'],
-                suggestion=f"Add {{% end{unclosed_tag['tag']} %}} tag to close this block"
+                tag_name=tag_name,
+                suggestion=f"Add {{% {close_tag} %}} tag to close this block"
             ))
         
         logger.debug(f"Tag matching check found {len(errors)} errors")
@@ -428,7 +444,8 @@ class DocxJinjaLinterService:
             
             # Process opening tags
             for match in block_starts:
-                tag_name = match.group(1).lower()
+                prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
+                tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
                 
                 if tag_name in self.paired_tags:
                     current_depth += 1
@@ -453,7 +470,8 @@ class DocxJinjaLinterService:
             
             # Process closing tags
             for match in block_ends:
-                end_tag_name = match.group(1).lower()
+                end_prefix = match.group(1) or ''  # p, tr, tc, r prefix (may be empty)
+                end_tag_name = match.group(2).lower() if match.group(2) else match.group(1).lower()
                 
                 if nesting_stack and end_tag_name == nesting_stack[-1]['tag']:
                     nesting_stack.pop()

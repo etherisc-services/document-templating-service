@@ -98,9 +98,7 @@ class LintReportMarkdownFormatter:
         if template_data:
             header += "## Template Data Summary\n\n"
             header += "```json\n"
-            header += json.dumps(template_data, indent=2, default=str)[:500]
-            if len(json.dumps(template_data, default=str)) > 500:
-                header += "\n... (truncated)"
+            header += json.dumps(template_data, indent=2, default=str)
             header += "\n```\n\n"
         
         return header
