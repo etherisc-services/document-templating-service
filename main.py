@@ -73,6 +73,13 @@ class DictToObject:
             return getattr(self, key)
         raise KeyError(key)
 
+    def __getattr__(self, name):
+        """Handle missing attributes gracefully"""
+        # Return the undefined class instance that was set globally
+        # This allows the undefined behavior to be handled properly
+        undefined_class = getattr(self, '_undefined_class', SilentUndefined)
+        return undefined_class(name=name)
+
     def __contains__(self, key):
         """Support 'key in dict' syntax"""
         return hasattr(self, key)
@@ -86,12 +93,14 @@ class DictToObject:
         return iter(self._original_dict.keys())
 
 
-def convert_dict_to_object(data):
+def convert_dict_to_object(data, undefined_class=SilentUndefined):
     """Recursively convert dictionaries to objects for dot notation access"""
     if isinstance(data, dict):
-        return DictToObject(data)
+        obj = DictToObject(data)
+        obj._undefined_class = undefined_class
+        return obj
     elif isinstance(data, list):
-        return [convert_dict_to_object(item) for item in data]
+        return [convert_dict_to_object(item, undefined_class) for item in data]
     else:
         return data
 
@@ -1075,14 +1084,6 @@ async def process_document_template(
                 logger.info(
                     f"Context prepared with {len(context_data)} variables")
 
-            # Convert dictionary values to objects for dot notation access
-            # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
-            context_data_with_objects = {}
-            for key, value in context_data.items():
-                context_data_with_objects[key] = convert_dict_to_object(value)
-
-            logger.info("Context data prepared with dot notation support")
-
         except Exception as e:
             # Clean up uploaded file
             if os.path.exists(file_path):
@@ -1125,6 +1126,14 @@ async def process_document_template(
                 undefined_class = StrictUndefined
                 logger.info(
                     "Using StrictUndefined - missing variables will raise errors")
+
+            # Convert dictionary values to objects for dot notation access with proper undefined handling
+            # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
+            context_data_with_objects = {}
+            for key, value in context_data.items():
+                context_data_with_objects[key] = convert_dict_to_object(value, undefined_class)
+
+            logger.info("Context data prepared with dot notation support and undefined handling")
 
             jinja_env = Environment(undefined=undefined_class)
 
