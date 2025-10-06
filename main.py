@@ -584,13 +584,14 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.7.0",
+        "version": "1.8.0",
         "features": {
             "missing_fields_handling": True,
             "chainable_undefined_support": True,
             "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
             "default_undefined_behavior": "silent",
-            "chained_access_support": True
+            "chained_access_support": True,
+            "json_property_validation": True
         },
         "build_info": {
             "python_version": "3.12",
@@ -895,6 +896,34 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         )
 
 
+def validate_json_property_names(data: dict, path: str = "") -> list:
+    """
+    Recursively validate JSON property names for invalid characters (dashes).
+    Returns a list of property paths that contain dashes.
+    """
+    invalid_properties = []
+    
+    if isinstance(data, dict):
+        for key, value in data.items():
+            current_path = f"{path}.{key}" if path else key
+            
+            # Check if the current key contains dashes
+            if '-' in key:
+                invalid_properties.append(current_path)
+            
+            # Recursively check nested objects
+            if isinstance(value, (dict, list)):
+                invalid_properties.extend(validate_json_property_names(value, current_path))
+    
+    elif isinstance(data, list):
+        for i, item in enumerate(data):
+            current_path = f"{path}[{i}]"
+            if isinstance(item, (dict, list)):
+                invalid_properties.extend(validate_json_property_names(item, current_path))
+    
+    return invalid_properties
+
+
 @app.post('/api/v1/process-template-document')
 async def process_document_template(
     file: UploadFile = File(...),
@@ -957,6 +986,20 @@ async def process_document_template(
         images_data = images
         api_undefined_behavior = undefined_behavior
         api_linter_options = linter_options
+
+        # Validate JSON property names for dashes
+        invalid_properties = validate_json_property_names(template_data)
+        if invalid_properties:
+            error = TemplateProcessingError(
+                message="Invalid property names detected. Property names cannot contain dashes (-) as they are interpreted as subtraction operators in Jinja2 templates.",
+                error_type="invalid_property_names",
+                details={
+                    "invalid_properties": invalid_properties,
+                    "count": len(invalid_properties),
+                    "suggestion": "Replace dashes with underscores in property names (e.g., 'excess-rain-flooding' → 'excess_rain_flooding')"
+                }
+            )
+            return create_error_response(error, 400)
 
         logger.info(
             f"Processing template with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
@@ -1225,9 +1268,9 @@ async def process_document_template(
 
             # CRITICAL FIX: Monkey patch jinja2.Template to use our undefined class
             # docxtpl calls Template(src_xml) directly, bypassing our custom environment
-            
+
             from jinja2 import Template as OriginalTemplate
-            
+
             # Create a patched Template class that uses our undefined class
             class PatchedTemplate(OriginalTemplate):
                 def __new__(cls, source, environment=None, **kwargs):
@@ -1235,18 +1278,18 @@ async def process_document_template(
                     if environment is None:
                         environment = jinja_env  # Use our custom environment
                     return super().__new__(cls)
-                
+
                 def __init__(self, source, environment=None, **kwargs):
                     # If no environment provided, create one with our undefined class
                     if environment is None:
                         environment = jinja_env  # Use our custom environment
                     super().__init__(source, environment, **kwargs)
-            
+
             # Monkey patch jinja2.Template
             import jinja2
             original_template_class = jinja2.Template
             jinja2.Template = PatchedTemplate
-            
+
             # Also patch it in docxtpl module
             try:
                 import docxtpl.template
@@ -1255,8 +1298,9 @@ async def process_document_template(
                     logger.info("Patched docxtpl.template.Template")
             except:
                 pass
-            
-            logger.info(f"Monkey patched jinja2.Template to use our environment with {undefined_class}")
+
+            logger.info(
+                f"Monkey patched jinja2.Template to use our environment with {undefined_class}")
 
             # Test the undefined behavior before rendering
             logger.info("Testing undefined behavior before rendering...")
@@ -1266,11 +1310,13 @@ async def process_document_template(
 
             try:
                 # Debug: Check if jinja_env is being passed correctly
-                logger.info(f"About to call document.render with jinja_env: {jinja_env}")
+                logger.info(
+                    f"About to call document.render with jinja_env: {jinja_env}")
                 logger.info(f"jinja_env.undefined: {jinja_env.undefined}")
-                
+
                 # Render template with context data (includes images if provided)
-                logger.info("Starting document.render() with monkey patched environment...")
+                logger.info(
+                    "Starting document.render() with monkey patched environment...")
                 document.render(context_data_with_objects, jinja_env)
             finally:
                 # Restore original Template class
