@@ -39,15 +39,19 @@ logger = logging.getLogger(__name__)
 class DictToObject:
     """Convert dictionary to object with dot notation access while preserving dict methods"""
 
-    def __init__(self, dictionary):
+    def __init__(self, dictionary, undefined_class=None):
         # Store original dictionary for dict methods
         self._original_dict = dictionary.copy()
+        
+        # Store undefined class for nested objects
+        if undefined_class is not None:
+            self.__dict__['_undefined_class'] = undefined_class
 
         for key, value in dictionary.items():
             if isinstance(value, dict):
-                value = DictToObject(value)
+                value = DictToObject(value, undefined_class)
             elif isinstance(value, list):
-                value = [DictToObject(item) if isinstance(
+                value = [DictToObject(item, undefined_class) if isinstance(
                     item, dict) else item for item in value]
             setattr(self, key, value)
 
@@ -78,9 +82,10 @@ class DictToObject:
         # Avoid recursion by checking __dict__ directly
         if name == '_undefined_class':
             return SilentUndefined  # Default fallback
-        
+
         # Return the undefined class instance that was set
-        undefined_class = self.__dict__.get('_undefined_class', SilentUndefined)
+        undefined_class = self.__dict__.get(
+            '_undefined_class', SilentUndefined)
         return undefined_class(name=name)
 
     def __contains__(self, key):
@@ -99,11 +104,7 @@ class DictToObject:
 def convert_dict_to_object(data, undefined_class=None):
     """Recursively convert dictionaries to objects for dot notation access"""
     if isinstance(data, dict):
-        obj = DictToObject(data)
-        # Set the undefined class in __dict__ to avoid __getattr__ recursion
-        if undefined_class is not None:
-            obj.__dict__['_undefined_class'] = undefined_class
-        return obj
+        return DictToObject(data, undefined_class)
     elif isinstance(data, list):
         return [convert_dict_to_object(item, undefined_class) for item in data]
     else:
@@ -1136,9 +1137,11 @@ async def process_document_template(
             # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
             context_data_with_objects = {}
             for key, value in context_data.items():
-                context_data_with_objects[key] = convert_dict_to_object(value, undefined_class)
+                context_data_with_objects[key] = convert_dict_to_object(
+                    value, undefined_class)
 
-            logger.info("Context data prepared with dot notation support and undefined handling")
+            logger.info(
+                "Context data prepared with dot notation support and undefined handling")
 
             jinja_env = Environment(undefined=undefined_class)
 
