@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "document-templating-service"
-version = "1.6.0"
+version = "1.6.1"
 description = "A FastAPI service for processing Word document templates with Jinja2 and converting to PDF"
 authors = [{name = "Document Templating Service Team"}]
 license = {text = "MIT"}

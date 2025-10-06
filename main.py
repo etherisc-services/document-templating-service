@@ -505,7 +505,7 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.6.0",
+        "version": "1.6.1",
         "features": {
             "missing_fields_handling": True,
             "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
