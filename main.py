@@ -14,6 +14,7 @@ from docxtpl import DocxTemplate, InlineImage
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from jinja2 import (
+    ChainableUndefined,
     StrictUndefined,
     TemplateNotFound,
     TemplateRuntimeError,
@@ -42,7 +43,7 @@ class DictToObject:
     def __init__(self, dictionary, undefined_class=None):
         # Store original dictionary for dict methods
         self._original_dict = dictionary.copy()
-        
+
         # Store undefined class for nested objects
         if undefined_class is not None:
             self.__dict__['_undefined_class'] = undefined_class
@@ -110,7 +111,79 @@ def convert_dict_to_object(data, undefined_class=None):
     else:
         return data
 
-# Custom Undefined classes for graceful variable handling
+# Custom Undefined classes based on ChainableUndefined for graceful variable handling
+
+
+class SilentChainableUndefined(ChainableUndefined):
+    """
+    ChainableUndefined that renders as empty string (silent mode)
+    Perfect for production - missing variables disappear silently
+    Handles chained access like missing_object.property gracefully
+    """
+    __slots__ = ()
+
+    def __str__(self):
+        return ''
+
+    def __unicode__(self):
+        return u''
+
+
+class DebugChainableUndefined(ChainableUndefined):
+    """
+    ChainableUndefined that shows variable names for debugging
+    Perfect for development - shows exactly which variables are missing
+    Handles chained access and shows full path like [MISSING: obj.prop.chain]
+    """
+    __slots__ = ()
+
+    def __str__(self):
+        """Return the variable name for debugging"""
+        if hasattr(self, '_undefined_name') and self._undefined_name:
+            return f"[MISSING: {self._undefined_name}]"
+        return "[MISSING: unknown]"
+
+    def __unicode__(self):
+        return str(self)
+
+    def __getattr__(self, name):
+        """Override to track the full path"""
+        current_name = getattr(self, '_undefined_name', 'unknown')
+
+        if current_name and current_name != 'unknown':
+            full_name = f"{current_name}.{name}"
+        else:
+            full_name = name
+
+        return self.__class__(name=full_name)
+
+    def __getitem__(self, name):
+        """Override for bracket access"""
+        current_name = getattr(self, '_undefined_name', 'unknown')
+
+        if current_name and current_name != 'unknown':
+            full_name = f"{current_name}[{name}]"
+        else:
+            full_name = f"[{name}]"
+
+        return self.__class__(name=full_name)
+
+
+class PropertyMissingChainableUndefined(ChainableUndefined):
+    """
+    ChainableUndefined that shows a standard "property missing" message
+    Good for user-facing templates where you want consistent messaging
+    Handles chained access gracefully
+    """
+    __slots__ = ()
+
+    def __str__(self):
+        return '<property missing in json>'
+
+    def __unicode__(self):
+        return u'<property missing in json>'
+
+# Legacy classes for backward compatibility (now deprecated)
 
 
 class SilentUndefined(Undefined):
@@ -511,11 +584,13 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.6.1",
+        "version": "1.7.0",
         "features": {
             "missing_fields_handling": True,
+            "chainable_undefined_support": True,
             "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
-            "default_undefined_behavior": "silent"
+            "default_undefined_behavior": "silent",
+            "chained_access_support": True
         },
         "build_info": {
             "python_version": "3.12",
@@ -1117,17 +1192,17 @@ async def process_document_template(
                     f"Using environment-specified undefined behavior: {undefined_behavior}")
 
             if undefined_behavior == "debug":
-                undefined_class = DebugUndefined
+                undefined_class = DebugChainableUndefined
                 logger.info(
-                    "Using DebugUndefined - missing variables will show as [Missing variable: name]")
+                    "Using DebugChainableUndefined - missing variables will show as [MISSING: variable_name] with full chaining support")
             elif undefined_behavior == "silent":
-                undefined_class = SilentUndefined
+                undefined_class = SilentChainableUndefined
                 logger.info(
-                    "Using SilentUndefined - missing variables will be empty")
+                    "Using SilentChainableUndefined - missing variables will be empty with full chaining support")
             elif undefined_behavior == "property_missing":
-                undefined_class = PropertyMissingUndefined
+                undefined_class = PropertyMissingChainableUndefined
                 logger.info(
-                    "Using PropertyMissingUndefined - missing variables will show as '<property missing in json>'")
+                    "Using PropertyMissingChainableUndefined - missing variables will show as '<property missing in json>' with full chaining support")
             else:  # "strict" or any other value
                 undefined_class = StrictUndefined
                 logger.info(
@@ -1144,8 +1219,28 @@ async def process_document_template(
                 "Context data prepared with dot notation support and undefined handling")
 
             jinja_env = Environment(undefined=undefined_class)
+            logger.info(f"Created Jinja2 environment with undefined class: {undefined_class}")
+            logger.info(f"Jinja2 environment undefined: {jinja_env.undefined}")
+
+            # CRITICAL FIX: Set the undefined class directly on the docxtpl template
+            # This ensures that docxtpl uses our custom undefined behavior
+            if hasattr(document, 'environment'):
+                document.environment.undefined = undefined_class
+                logger.info("Set undefined class on document.environment")
+            
+            # Also try setting it on the internal jinja environment if it exists
+            if hasattr(document, '_env'):
+                document._env.undefined = undefined_class
+                logger.info("Set undefined class on document._env")
+
+            # Test the undefined behavior before rendering
+            logger.info("Testing undefined behavior before rendering...")
+            test_undefined = undefined_class(name="test_var")
+            logger.info(f"Test undefined instance: {test_undefined}")
+            logger.info(f"Test undefined string: '{str(test_undefined)}'")
 
             # Render template with context data (includes images if provided)
+            logger.info("Starting document.render() with custom jinja_env...")
             document.render(context_data_with_objects, jinja_env)
             logger.info("Template rendered successfully")
 
