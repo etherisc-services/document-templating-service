@@ -249,8 +249,6 @@ class ImageData(BaseModel):
     height_px: Optional[int] = None  # Height in pixels (alternative to mm)
 
 
-
-
 def create_error_response(error: DocumentProcessingError, status_code: int = 500) -> JSONResponse:
     """Create a structured error response"""
     return JSONResponse(
@@ -498,7 +496,7 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.5.1",
+        "version": "1.6.0",
         "features": {
             "missing_fields_handling": True,
             "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
@@ -869,8 +867,9 @@ async def process_document_template(
         images_data = images
         api_undefined_behavior = undefined_behavior
         api_linter_options = linter_options
-        
-        logger.info(f"Processing template with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
+
+        logger.info(
+            f"Processing template with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
 
         if template_data is None or (isinstance(template_data, (list, dict)) and len(template_data) == 0):
             error = TemplateProcessingError(
