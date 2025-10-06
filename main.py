@@ -75,9 +75,12 @@ class DictToObject:
 
     def __getattr__(self, name):
         """Handle missing attributes gracefully"""
-        # Return the undefined class instance that was set globally
-        # This allows the undefined behavior to be handled properly
-        undefined_class = getattr(self, '_undefined_class', SilentUndefined)
+        # Avoid recursion by checking __dict__ directly
+        if name == '_undefined_class':
+            return SilentUndefined  # Default fallback
+        
+        # Return the undefined class instance that was set
+        undefined_class = self.__dict__.get('_undefined_class', SilentUndefined)
         return undefined_class(name=name)
 
     def __contains__(self, key):
@@ -93,11 +96,13 @@ class DictToObject:
         return iter(self._original_dict.keys())
 
 
-def convert_dict_to_object(data, undefined_class=SilentUndefined):
+def convert_dict_to_object(data, undefined_class=None):
     """Recursively convert dictionaries to objects for dot notation access"""
     if isinstance(data, dict):
         obj = DictToObject(data)
-        obj._undefined_class = undefined_class
+        # Set the undefined class in __dict__ to avoid __getattr__ recursion
+        if undefined_class is not None:
+            obj.__dict__['_undefined_class'] = undefined_class
         return obj
     elif isinstance(data, list):
         return [convert_dict_to_object(item, undefined_class) for item in data]
