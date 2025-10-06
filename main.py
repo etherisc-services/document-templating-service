@@ -1219,19 +1219,44 @@ async def process_document_template(
                 "Context data prepared with dot notation support and undefined handling")
 
             jinja_env = Environment(undefined=undefined_class)
-            logger.info(f"Created Jinja2 environment with undefined class: {undefined_class}")
+            logger.info(
+                f"Created Jinja2 environment with undefined class: {undefined_class}")
             logger.info(f"Jinja2 environment undefined: {jinja_env.undefined}")
 
-            # CRITICAL FIX: Set the undefined class directly on the docxtpl template
-            # This ensures that docxtpl uses our custom undefined behavior
-            if hasattr(document, 'environment'):
-                document.environment.undefined = undefined_class
-                logger.info("Set undefined class on document.environment")
+            # CRITICAL FIX: Monkey patch jinja2.Template to use our undefined class
+            # docxtpl calls Template(src_xml) directly, bypassing our custom environment
             
-            # Also try setting it on the internal jinja environment if it exists
-            if hasattr(document, '_env'):
-                document._env.undefined = undefined_class
-                logger.info("Set undefined class on document._env")
+            from jinja2 import Template as OriginalTemplate
+            
+            # Create a patched Template class that uses our undefined class
+            class PatchedTemplate(OriginalTemplate):
+                def __new__(cls, source, environment=None, **kwargs):
+                    # If no environment provided, create one with our undefined class
+                    if environment is None:
+                        environment = jinja_env  # Use our custom environment
+                    return super().__new__(cls)
+                
+                def __init__(self, source, environment=None, **kwargs):
+                    # If no environment provided, create one with our undefined class
+                    if environment is None:
+                        environment = jinja_env  # Use our custom environment
+                    super().__init__(source, environment, **kwargs)
+            
+            # Monkey patch jinja2.Template
+            import jinja2
+            original_template_class = jinja2.Template
+            jinja2.Template = PatchedTemplate
+            
+            # Also patch it in docxtpl module
+            try:
+                import docxtpl.template
+                if hasattr(docxtpl.template, 'Template'):
+                    docxtpl.template.Template = PatchedTemplate
+                    logger.info("Patched docxtpl.template.Template")
+            except:
+                pass
+            
+            logger.info(f"Monkey patched jinja2.Template to use our environment with {undefined_class}")
 
             # Test the undefined behavior before rendering
             logger.info("Testing undefined behavior before rendering...")
@@ -1239,9 +1264,24 @@ async def process_document_template(
             logger.info(f"Test undefined instance: {test_undefined}")
             logger.info(f"Test undefined string: '{str(test_undefined)}'")
 
-            # Render template with context data (includes images if provided)
-            logger.info("Starting document.render() with custom jinja_env...")
-            document.render(context_data_with_objects, jinja_env)
+            try:
+                # Debug: Check if jinja_env is being passed correctly
+                logger.info(f"About to call document.render with jinja_env: {jinja_env}")
+                logger.info(f"jinja_env.undefined: {jinja_env.undefined}")
+                
+                # Render template with context data (includes images if provided)
+                logger.info("Starting document.render() with monkey patched environment...")
+                document.render(context_data_with_objects, jinja_env)
+            finally:
+                # Restore original Template class
+                jinja2.Template = original_template_class
+                try:
+                    if hasattr(docxtpl.template, 'Template'):
+                        docxtpl.template.Template = original_template_class
+                        logger.info("Restored docxtpl.template.Template")
+                except:
+                    pass
+                logger.info("Restored original jinja2.Template")
             logger.info("Template rendered successfully")
 
         except Exception as e:
