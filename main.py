@@ -503,6 +503,23 @@ async def healthcheck():
     return SERVICE_STATUS
 
 
+@app.get('/version')
+async def get_version():
+    """Get the current version of the service"""
+    return {
+        "version": "1.5.0",
+        "features": {
+            "missing_fields_handling": True,
+            "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
+            "default_undefined_behavior": "silent"
+        },
+        "build_info": {
+            "python_version": "3.12",
+            "release_date": "2025-10-06"
+        }
+    }
+
+
 @app.post('/api/v1/lint-docx-template')
 async def lint_docx_template(
     document: UploadFile = File(...,
@@ -808,11 +825,12 @@ async def process_document_template(
     """
     Process a Word document template with data injection and convert to PDF.
 
-    Supports two usage modes:
-    1. Simple mode: Use 'data' parameter with JSON object (legacy format)
-    2. Enhanced mode: Use 'request_data' parameter with template_data, images, and linter_options
+    Supports flexible parameter usage:
+    - Use 'data' parameter with JSON object for simple requests
+    - Use 'request_data' parameter with JSON string for complex requests
+    - Both parameters support the same features: missing fields handling, images, and linter options
 
-    Enhanced mode enables inline image support via base64 encoded PNGs and custom linter configuration.
+    Both modes enable inline image support via base64 encoded PNGs and custom linter configuration.
 
     **NEW: Integrated Template Linting**
     - Templates are automatically validated before processing (strict mode by default)
@@ -853,25 +871,45 @@ async def process_document_template(
             )
             return create_error_response(error, 400)
 
-        # Smart parameter detection - determine usage mode
+        # Unified parameter processing - both 'data' and 'request_data' work identically
+        template_data = None
+        images_data = None
+        api_undefined_behavior = None
+        api_linter_options = None
+        
         if request_data is not None:
-            # Enhanced mode: process request_data with potential images
+            # Process request_data parameter (JSON string format)
             try:
                 parsed_request = json.loads(request_data)
-                request_obj = TemplateRequest(**parsed_request)
-                template_data = request_obj.template_data
-                images_data = request_obj.images
-                api_undefined_behavior = request_obj.undefined_behavior
-                api_linter_options = request_obj.linter_options
-                logger.info(
-                    f"Enhanced mode: Processing with {len(template_data)} data keys and {len(images_data or {})} images")
+                if isinstance(parsed_request, dict):
+                    # Check if it's a TemplateRequest structure or simple data
+                    if "template_data" in parsed_request:
+                        # Full TemplateRequest structure
+                        request_obj = TemplateRequest(**parsed_request)
+                        template_data = request_obj.template_data
+                        images_data = request_obj.images
+                        api_undefined_behavior = request_obj.undefined_behavior
+                        api_linter_options = request_obj.linter_options
+                    else:
+                        # Simple data structure - treat as template_data
+                        template_data = parsed_request
+                        images_data = None
+                        api_undefined_behavior = None
+                        api_linter_options = None
+                else:
+                    template_data = parsed_request
+                    images_data = None
+                    api_undefined_behavior = None
+                    api_linter_options = None
+                    
+                logger.info(f"Processing request_data with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
             except json.JSONDecodeError as e:
                 error = TemplateProcessingError(
                     message=f"Invalid JSON in request_data: {str(e)}",
                     error_type="invalid_json",
                     details={
                         "json_error": str(e),
-                        "suggestion": "Ensure request_data is valid JSON with template_data and optional images"
+                        "suggestion": "Ensure request_data is valid JSON"
                     }
                 )
                 return create_error_response(error, 400)
@@ -881,22 +919,45 @@ async def process_document_template(
                     error_type="invalid_request_structure",
                     details={
                         "error": str(e),
-                        "suggestion": "Ensure request follows TemplateRequest model structure"
+                        "suggestion": "Ensure request follows valid JSON structure"
                     }
                 )
                 return create_error_response(error, 400)
         elif data is not None:
-            # Legacy mode: simple data parameter
-            template_data = data
-            images_data = None
-            api_undefined_behavior = None
-            api_linter_options = None
-            logger.info(
-                f"Legacy mode: Processing with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data")
+            # Process data parameter (can be JSON object or TemplateRequest-like structure)
+            if isinstance(data, dict):
+                # Check if it's a TemplateRequest structure or simple data
+                if "template_data" in data:
+                    # TemplateRequest-like structure in data parameter
+                    try:
+                        request_obj = TemplateRequest(**data)
+                        template_data = request_obj.template_data
+                        images_data = request_obj.images
+                        api_undefined_behavior = request_obj.undefined_behavior
+                        api_linter_options = request_obj.linter_options
+                    except Exception as e:
+                        # Fallback to treating as simple template data
+                        template_data = data
+                        images_data = None
+                        api_undefined_behavior = None
+                        api_linter_options = None
+                else:
+                    # Simple data structure - treat as template_data
+                    template_data = data
+                    images_data = None
+                    api_undefined_behavior = None
+                    api_linter_options = None
+            else:
+                template_data = data
+                images_data = None
+                api_undefined_behavior = None
+                api_linter_options = None
+                
+            logger.info(f"Processing data parameter with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
         else:
             # No data provided at all
             error = TemplateProcessingError(
-                message="No template data provided. Use either 'data' parameter (legacy) or 'request_data' parameter (enhanced with images)",
+                message="No template data provided. Use either 'data' parameter or 'request_data' parameter",
                 error_type="missing_template_data",
                 details={
                     "requirement": "Provide either 'data' (JSON object) or 'request_data' (JSON string)",
@@ -1101,19 +1162,19 @@ async def process_document_template(
             document = DocxTemplate(file_path)
             logger.info("Template loaded successfully")
 
-            # Process images if in enhanced mode
+            # Process images if provided
             if images_data:
                 processed_images = process_images(images_data, document)
                 # Merge template data with processed images
                 context_data = template_data.copy()
                 context_data.update(processed_images)
                 logger.info(
-                    f"Enhanced mode: Context prepared with {len(context_data)} variables (including {len(processed_images)} images)")
+                    f"Context prepared with {len(context_data)} variables (including {len(processed_images)} images)")
             else:
-                # Legacy mode: use template_data directly
+                # Use template_data directly
                 context_data = template_data
                 logger.info(
-                    f"Legacy mode: Context prepared with {len(context_data)} variables")
+                    f"Context prepared with {len(context_data)} variables")
 
             # Convert dictionary values to objects for dot notation access
             # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
