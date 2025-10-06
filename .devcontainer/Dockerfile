@@ -22,8 +22,8 @@ COPY requirements.txt requirements-test.txt ./
 RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir -r requirements-test.txt
 
-# Create temp directory for file processing
-RUN mkdir -p temp && chmod 755 temp
+# Create temp directory for file processing with proper ownership
+RUN mkdir -p temp && chmod 755 temp && chown vscode:vscode temp
 
 # Install additional development tools
 RUN pip install --no-cache-dir \

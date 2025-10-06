@@ -1,12 +1,10 @@
-version: "3.8"
-
 services:
   app:
     build:
       context: ..
       dockerfile: .devcontainer/Dockerfile
     volumes:
-      - ../..:/workspaces:cached
+      - ..:/workspace:cached
     command: sleep infinity
     networks:
       - dev-network
@@ -19,13 +17,12 @@ services:
   gotenberg:
     image: gotenberg/gotenberg:8
     ports:
-      - "3001:3000"
+      - "3002:3000"
     networks:
       - dev-network
     command:
       - "gotenberg"
       - "--api-timeout=30s"
-      - "--api-timeout-duration=30s"
 
 networks:
   dev-network:

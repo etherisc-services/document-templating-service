@@ -1,73 +1,90 @@
-from fastapi import Body, FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import Json
-from docxtpl import DocxTemplate, InlineImage
-from docx.shared import Mm
-import aiofiles
-from utils import remove_temporary_files, get_env
-import requests
-import os
-import traceback
-import json
 import base64
-import tempfile
-from typing import Dict, Any, Optional
-from jinja2 import TemplateSyntaxError, UndefinedError, TemplateRuntimeError, TemplateNotFound, StrictUndefined, Undefined
-from jinja2.exceptions import TemplateError
-from docx.opc.exceptions import PackageNotFoundError
+import json
 import logging
+import os
+import tempfile
+import traceback
+from typing import Any, Dict, Optional
+
+import aiofiles
+import requests
+from docx.opc.exceptions import PackageNotFoundError
+from docx.shared import Mm
+from docxtpl import DocxTemplate, InlineImage
+from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
+from jinja2 import (
+    StrictUndefined,
+    TemplateNotFound,
+    TemplateRuntimeError,
+    TemplateSyntaxError,
+    Undefined,
+    UndefinedError,
+)
+from jinja2.exceptions import TemplateError
+from pydantic import BaseModel, Json
+
+from models.schemas import LintOptions, LintResponseFormat, LintResult
+from services.docx_linter import DocxJinjaLinterService
+from services.markdown_formatter import create_lint_report_markdown
+from utils import get_env, remove_temporary_files
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Utility class to convert dictionaries to objects with dot notation
+
+
 class DictToObject:
     """Convert dictionary to object with dot notation access while preserving dict methods"""
+
     def __init__(self, dictionary):
         # Store original dictionary for dict methods
         self._original_dict = dictionary.copy()
-        
+
         for key, value in dictionary.items():
             if isinstance(value, dict):
                 value = DictToObject(value)
             elif isinstance(value, list):
-                value = [DictToObject(item) if isinstance(item, dict) else item for item in value]
+                value = [DictToObject(item) if isinstance(
+                    item, dict) else item for item in value]
             setattr(self, key, value)
-    
+
     def items(self):
         """Return items like a dictionary"""
         return self._original_dict.items()
-    
+
     def keys(self):
         """Return keys like a dictionary"""
         return self._original_dict.keys()
-    
+
     def values(self):
         """Return values like a dictionary (but converted to objects)"""
         return [getattr(self, key) for key in self._original_dict.keys()]
-    
+
     def get(self, key, default=None):
         """Get value like a dictionary"""
         return getattr(self, key, default)
-    
+
     def __getitem__(self, key):
         """Support dict[key] syntax"""
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(key)
-    
+
     def __contains__(self, key):
         """Support 'key in dict' syntax"""
         return hasattr(self, key)
-    
+
     def __len__(self):
         """Support len(dict) syntax"""
         return len(self._original_dict)
-    
+
     def __iter__(self):
         """Support iteration over keys"""
         return iter(self._original_dict.keys())
+
 
 def convert_dict_to_object(data):
     """Recursively convert dictionaries to objects for dot notation access"""
@@ -79,28 +96,41 @@ def convert_dict_to_object(data):
         return data
 
 # Custom Undefined classes for graceful variable handling
+
+
 class SilentUndefined(Undefined):
     """
     An undefined that silently ignores missing variables by rendering as empty string.
     This allows templates to be more forgiving of missing data.
     """
+
     def __str__(self):
         return ''
-    
+
     def __unicode__(self):
         return u''
-    
+
     def __bool__(self):
         return False
-    
+
     def __nonzero__(self):  # Python 2 compatibility
         return False
-    
+
     def __getattr__(self, name):
-        return self.__class__(name=name)
-    
+        # For nested attributes, preserve the path but still return SilentUndefined
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}.{name}"
+        else:
+            full_name = name
+        return self.__class__(name=full_name)
+
     def __getitem__(self, name):
-        return self.__class__(name=name)
+        # For dictionary access, preserve the path but still return SilentUndefined
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}[{name}]"
+        else:
+            full_name = f"[{name}]"
+        return self.__class__(name=full_name)
 
 
 class DebugUndefined(Undefined):
@@ -108,22 +138,23 @@ class DebugUndefined(Undefined):
     An undefined that outputs a clear message showing the missing variable name.
     This helps identify which variables are missing in the template.
     """
+
     def __str__(self):
         if self._undefined_name:
             return '[Missing variable: %s]' % self._undefined_name
         return '[Missing variable: undefined]'
-    
+
     def __unicode__(self):
         if self._undefined_name:
             return u'[Missing variable: %s]' % self._undefined_name
         return u'[Missing variable: undefined]'
-    
+
     def __bool__(self):
         return False
-    
+
     def __nonzero__(self):  # Python 2 compatibility
         return False
-    
+
     def __getattr__(self, name):
         # For nested attributes, show the full path
         if self._undefined_name:
@@ -131,7 +162,7 @@ class DebugUndefined(Undefined):
         else:
             full_name = name
         return self.__class__(name=full_name)
-    
+
     def __getitem__(self, name):
         # For dictionary access, show the full path
         if self._undefined_name:
@@ -140,34 +171,74 @@ class DebugUndefined(Undefined):
             full_name = f"[{name}]"
         return self.__class__(name=full_name)
 
+
+class PropertyMissingUndefined(Undefined):
+    """
+    An undefined that outputs '<property missing in json>' for missing variables.
+    This provides a clear indication that a property is missing from the JSON data.
+    """
+
+    def __str__(self):
+        return '<property missing in json>'
+
+    def __unicode__(self):
+        return u'<property missing in json>'
+
+    def __bool__(self):
+        return False
+
+    def __nonzero__(self):  # Python 2 compatibility
+        return False
+
+    def __getattr__(self, name):
+        # For nested attributes, still return PropertyMissingUndefined
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}.{name}"
+        else:
+            full_name = name
+        return self.__class__(name=full_name)
+
+    def __getitem__(self, name):
+        # For dictionary access, still return PropertyMissingUndefined
+        if self._undefined_name:
+            full_name = f"{self._undefined_name}[{name}]"
+        else:
+            full_name = f"[{name}]"
+        return self.__class__(name=full_name)
+
 # Custom exception classes for structured error handling
+
+
 class DocumentProcessingError(Exception):
     """Base class for document processing errors"""
+
     def __init__(self, message: str, error_type: str, details: Dict[str, Any] = None):
         self.message = message
         self.error_type = error_type
         self.details = details or {}
         super().__init__(self.message)
 
+
 class TemplateProcessingError(DocumentProcessingError):
     """Errors related to template processing"""
     pass
+
 
 class FileProcessingError(DocumentProcessingError):
     """Errors related to file operations"""
     pass
 
+
 class PDFConversionError(DocumentProcessingError):
     """Errors related to PDF conversion"""
     pass
 
+
 # Pydantic models for API request/response
-from pydantic import BaseModel
+
 
 # Import linter service and models
-from services.docx_linter import DocxJinjaLinterService
-from services.markdown_formatter import create_lint_report_markdown
-from models.schemas import LintOptions, LintResult, LintResponseFormat
+
 
 class ImageData(BaseModel):
     """Model for inline image data"""
@@ -177,12 +248,17 @@ class ImageData(BaseModel):
     width_px: Optional[int] = None  # Width in pixels (alternative to mm)
     height_px: Optional[int] = None  # Height in pixels (alternative to mm)
 
+
 class TemplateRequest(BaseModel):
     """Model for the complete template processing request"""
     template_data: Dict[str, Any]  # The data to inject into the template
-    images: Optional[Dict[str, ImageData]] = None  # Optional images referenced in template
-    undefined_behavior: Optional[str] = None  # Override undefined variable behavior: "debug", "silent", "strict"
-    linter_options: Optional[LintOptions] = None  # Optional linter configuration
+    # Optional images referenced in template
+    images: Optional[Dict[str, ImageData]] = None
+    # Override undefined variable behavior: "debug", "silent", "strict", "property_missing"
+    undefined_behavior: Optional[str] = None
+    # Optional linter configuration
+    linter_options: Optional[LintOptions] = None
+
 
 def create_error_response(error: DocumentProcessingError, status_code: int = 500) -> JSONResponse:
     """Create a structured error response"""
@@ -195,6 +271,7 @@ def create_error_response(error: DocumentProcessingError, status_code: int = 500
             "details": error.details
         }
     )
+
 
 def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingError:
     """Convert Jinja2/docxtpl errors to structured template errors"""
@@ -213,7 +290,7 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
     elif isinstance(e, UndefinedError):
         error_message = str(e)
         suggestion = "Check your template variables match the provided data"
-        
+
         # Handle specific case of accessing attributes on dict objects
         if "dict object" in error_message and "has no attribute" in error_message:
             # Extract the attribute name from the error message
@@ -221,7 +298,7 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
             if len(parts) > 1:
                 attr_name = parts[1].strip().strip("'\"")
                 suggestion = f"The template is trying to access '.{attr_name}' on a dictionary. Use bracket notation like {{{{data['{attr_name}']}}}} instead of {{{{data.{attr_name}}}}} or ensure your data structure provides objects with attributes rather than dictionaries."
-        
+
         return TemplateProcessingError(
             message=f"Undefined variable in template: {error_message}",
             error_type="undefined_variable",
@@ -291,48 +368,51 @@ def handle_template_error(e: Exception, file_path: str) -> TemplateProcessingErr
         )
 
 # Image processing functions
+
+
 def process_base64_image(image_data: ImageData, doc: DocxTemplate, image_name: str) -> InlineImage:
     """
     Process base64 image data and create an InlineImage object for docxtpl.
-    
+
     Args:
         image_data: ImageData object containing base64 data and dimensions
         doc: DocxTemplate instance 
         image_name: Name/identifier for the image
-        
+
     Returns:
         InlineImage object ready for template rendering
-        
+
     Raises:
         FileProcessingError: If image processing fails
     """
     try:
         # Decode base64 image data
         image_bytes = base64.b64decode(image_data.data)
-        
+
         # Create temporary file for the image
         with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
             temp_file.write(image_bytes)
             temp_file_path = temp_file.name
-        
+
         # Determine dimensions - prioritize mm over px
         width = None
         height = None
-        
+
         if image_data.width_mm is not None:
             width = Mm(image_data.width_mm)
         elif image_data.width_px is not None:
             # Convert pixels to mm (assuming 96 DPI: 1 inch = 25.4mm, 96px = 25.4mm)
             width = Mm(image_data.width_px * 25.4 / 96)
-            
+
         if image_data.height_mm is not None:
             height = Mm(image_data.height_mm)
         elif image_data.height_px is not None:
             height = Mm(image_data.height_px * 25.4 / 96)
-        
+
         # Create InlineImage object
         if width and height:
-            inline_image = InlineImage(doc, temp_file_path, width=width, height=height)
+            inline_image = InlineImage(
+                doc, temp_file_path, width=width, height=height)
         elif width:
             inline_image = InlineImage(doc, temp_file_path, width=width)
         elif height:
@@ -340,21 +420,21 @@ def process_base64_image(image_data: ImageData, doc: DocxTemplate, image_name: s
         else:
             # Use default size if no dimensions specified
             inline_image = InlineImage(doc, temp_file_path)
-        
+
         # Store temp file path for later cleanup (don't delete immediately)
         inline_image._temp_file_path = temp_file_path
-        
+
         logger.info(f"Successfully processed image: {image_name}")
         return inline_image
-        
+
     except Exception as e:
         # Clean up temporary file if it exists
         if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
-            
+
         raise FileProcessingError(
             message=f"Failed to process image '{image_name}': {str(e)}",
-            error_type="image_processing_error", 
+            error_type="image_processing_error",
             details={
                 "image_name": image_name,
                 "error": str(e),
@@ -363,32 +443,35 @@ def process_base64_image(image_data: ImageData, doc: DocxTemplate, image_name: s
             }
         )
 
+
 def process_images(images_data: Optional[Dict[str, ImageData]], doc: DocxTemplate) -> Dict[str, InlineImage]:
     """
     Process all images in the request and return a dictionary of InlineImage objects.
-    
+
     Args:
         images_data: Dictionary of image data from the request
         doc: DocxTemplate instance
-        
+
     Returns:
         Dictionary mapping image names to InlineImage objects
     """
     if not images_data:
         return {}
-    
+
     processed_images = {}
-    
+
     for image_name, image_data in images_data.items():
         try:
-            processed_images[image_name] = process_base64_image(image_data, doc, image_name)
+            processed_images[image_name] = process_base64_image(
+                image_data, doc, image_name)
             logger.info(f"Processed image: {image_name}")
         except Exception as e:
             logger.error(f"Failed to process image {image_name}: {str(e)}")
             raise  # Re-raise to be handled by the main error handling
-    
+
     logger.info(f"Successfully processed {len(processed_images)} images")
     return processed_images
+
 
 app = FastAPI(
     title="Document Template Processing Service",
@@ -407,10 +490,12 @@ linter_service = DocxJinjaLinterService()
 
 SERVICE_STATUS = {'status': 'Service is healthy !'}
 
+
 @app.get('/')
 async def livenessprobe():
     remove_temporary_files()
     return SERVICE_STATUS
+
 
 @app.get('/health-check')
 async def healthcheck():
@@ -420,22 +505,24 @@ async def healthcheck():
 
 @app.post('/api/v1/lint-docx-template')
 async def lint_docx_template(
-    document: UploadFile = File(..., description="DocX file containing Jinja2 template to lint"),
-    options: LintOptions = Body(default=LintOptions(), description="Linting configuration options")
+    document: UploadFile = File(...,
+                                description="DocX file containing Jinja2 template to lint"),
+    options: LintOptions = Body(default=LintOptions(
+    ), description="Linting configuration options")
 ):
     """
     Lint a DocX file containing Jinja2 templates for syntax errors and structural issues.
-    
+
     This endpoint validates:
     - Jinja2 syntax correctness
     - Matching tag pairs (if/endif, for/endfor, etc.)
     - Template structure and nesting
     - Code quality and best practices
-    
+
     Response formats:
     - PDF (default): Professional linting report as PDF document
     - JSON (optional): Structured data for programmatic use
-    
+
     Set options.response_format = "json" for JSON response.
     """
     try:
@@ -447,7 +534,7 @@ async def lint_docx_template(
                 details={"requirement": "A valid .docx file must be uploaded"}
             )
             return create_error_response(error, 400)
-        
+
         if not document.filename.lower().endswith('.docx'):
             error = FileProcessingError(
                 message="Invalid file type. Only .docx files are supported for linting",
@@ -459,23 +546,23 @@ async def lint_docx_template(
                 }
             )
             return create_error_response(error, 400)
-        
+
         # Check file size (reasonable limit for linting)
         file_content = await document.read()
         file_size = len(file_content)
-        
+
         if file_size > 10 * 1024 * 1024:  # 10MB limit for linting
             error = FileProcessingError(
                 message="File too large for linting. Maximum size is 10MB",
                 error_type="file_too_large",
                 details={
-                    "max_size_mb": 10, 
+                    "max_size_mb": 10,
                     "file_size_bytes": file_size,
                     "suggestion": "Try linting smaller sections of the document"
                 }
             )
             return create_error_response(error, 400)
-        
+
         if file_size == 0:
             error = FileProcessingError(
                 message="Uploaded file is empty",
@@ -483,35 +570,36 @@ async def lint_docx_template(
                 details={"requirement": "File must contain content to lint"}
             )
             return create_error_response(error, 400)
-        
-        logger.info(f"Starting linting process for {document.filename} ({file_size} bytes)")
-        
+
+        logger.info(
+            f"Starting linting process for {document.filename} ({file_size} bytes)")
+
         # Perform linting
         lint_result = await linter_service.lint_docx_file(
             file_content=file_content,
             filename=document.filename,
             options=options
         )
-        
+
         logger.info(f"Linting completed for {document.filename}: "
-                   f"{lint_result.summary.total_errors} errors, "
-                   f"{lint_result.summary.total_warnings} warnings")
-        
+                    f"{lint_result.summary.total_errors} errors, "
+                    f"{lint_result.summary.total_warnings} warnings")
+
         # Return response based on requested format
         if options.response_format == LintResponseFormat.JSON:
             return lint_result
         else:
             # Generate PDF report
             return await _generate_lint_pdf_report(lint_result, document.filename)
-        
+
     except FileProcessingError as e:
         logger.error(f"File processing error during linting: {e.message}")
         return create_error_response(e, 400)
-        
+
     except Exception as e:
         logger.error(f"Unexpected error during linting: {str(e)}")
         logger.error(traceback.format_exc())
-        
+
         error = DocumentProcessingError(
             message=f"An unexpected error occurred during linting: {str(e)}",
             error_type="linting_error",
@@ -524,33 +612,34 @@ async def lint_docx_template(
         return create_error_response(error, 500)
 
 
-async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str, template_data = None) -> FileResponse:
+async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str, template_data=None) -> FileResponse:
     """
     Generate a PDF report from linting results.
-    
+
     Args:
         lint_result: The linting results
         document_name: Name of the original document
-        
+
     Returns:
         FileResponse with the PDF report
     """
     try:
         # Create markdown report
-        markdown_content = create_lint_report_markdown(lint_result, document_name, template_data)
-        
+        markdown_content = create_lint_report_markdown(
+            lint_result, document_name, template_data)
+
         # Ensure temp directory exists
         os.makedirs('temp', exist_ok=True)
-        
+
         # Create temporary markdown file and HTML wrapper for Gotenberg
         import tempfile
-        
+
         # Create markdown file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, dir='temp') as md_file:
             md_file.write(markdown_content)
             md_file_path = md_file.name
             md_filename = os.path.basename(md_file_path)
-        
+
         # Create HTML wrapper file for Gotenberg markdown conversion
         html_wrapper = f'''<!doctype html>
 <html lang="en">
@@ -571,16 +660,16 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
     {{{{ toHTML "{md_filename}" }}}}
   </body>
 </html>'''
-        
+
         with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, dir='temp') as html_file:
             html_file.write(html_wrapper)
             html_file_path = html_file.name
-        
+
         # Generate PDF filename
         base_name = os.path.splitext(document_name)[0]
         pdf_filename = f"{base_name}_lint_report.pdf"
         pdf_file_path = f"temp/{pdf_filename}"
-        
+
         # Convert to PDF using Gotenberg
         gotenberg_url = get_env('GOTENBERG_API_URL')
         if not gotenberg_url:
@@ -589,26 +678,28 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
                 error_type="gotenberg_not_configured",
                 details={"env_var": "GOTENBERG_API_URL"}
             )
-        
+
         resource_url = f'{gotenberg_url}/forms/chromium/convert/markdown'
-        
-        logger.info(f"Converting lint report to PDF via Gotenberg: {resource_url}")
-        logger.debug(f"Markdown content length: {len(markdown_content)} characters")
-        
+
+        logger.info(
+            f"Converting lint report to PDF via Gotenberg: {resource_url}")
+        logger.debug(
+            f"Markdown content length: {len(markdown_content)} characters")
+
         # Send both HTML wrapper and markdown file to Gotenberg
         with open(html_file_path, 'rb') as html_file, open(md_file_path, 'rb') as md_file:
             files = [
                 ('files', ('index.html', html_file, 'text/html')),
                 ('files', (md_filename, md_file, 'text/markdown'))
             ]
-            
+
             # Make request to Gotenberg with timeout
             response = requests.post(
                 url=resource_url,
                 files=files,
                 timeout=30  # 30 second timeout for reports
             )
-        
+
         # Check Gotenberg response
         if response.status_code != 200:
             error_details = {
@@ -616,7 +707,7 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
                 "status_code": response.status_code,
                 "response_headers": dict(response.headers)
             }
-            
+
             # Try to extract error message from response
             try:
                 if response.headers.get('content-type', '').startswith('application/json'):
@@ -625,14 +716,15 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
                 else:
                     error_details["response_text"] = response.text[:500]
             except:
-                error_details["response_text"] = response.text[:500] if response.text else "No response text"
-            
+                error_details["response_text"] = response.text[:
+                                                               500] if response.text else "No response text"
+
             raise PDFConversionError(
                 message=f"Gotenberg linting report conversion failed with status {response.status_code}",
                 error_type="gotenberg_conversion_failed",
                 details=error_details
             )
-        
+
         # Validate response content
         if not response.content or not response.content.startswith(b'%PDF'):
             raise PDFConversionError(
@@ -644,27 +736,28 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
                     "content_start": response.content[:100].decode('utf-8', errors='ignore') if response.content else "Empty"
                 }
             )
-        
+
         # Save PDF response
         async with aiofiles.open(pdf_file_path, 'wb') as out_file:
             await out_file.write(response.content)
-        
-        logger.info(f"Lint report PDF generated successfully: {pdf_file_path} ({len(response.content)} bytes)")
-        
+
+        logger.info(
+            f"Lint report PDF generated successfully: {pdf_file_path} ({len(response.content)} bytes)")
+
         # Clean up temporary files
         try:
             os.unlink(md_file_path)
             os.unlink(html_file_path)
         except:
             pass
-        
+
         # Return PDF file
         return FileResponse(
             pdf_file_path,
             media_type='application/pdf',
             filename=pdf_filename
         )
-        
+
     except Exception as e:
         # Clean up files on error
         try:
@@ -676,9 +769,9 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
                 os.unlink(pdf_file_path)
         except:
             pass
-        
+
         logger.error(f"Failed to generate lint report PDF: {str(e)}")
-        
+
         # Return JSON fallback if PDF generation fails (200 OK with error details)
         return JSONResponse(
             status_code=200,
@@ -708,26 +801,26 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
 
 @app.post('/api/v1/process-template-document')
 async def process_document_template(
-    data: Json = Body(None), 
+    data: Json = Body(None),
     request_data: str = Body(None),
     file: UploadFile = File(...)
 ):
     """
     Process a Word document template with data injection and convert to PDF.
-    
+
     Supports two usage modes:
     1. Simple mode: Use 'data' parameter with JSON object (legacy format)
     2. Enhanced mode: Use 'request_data' parameter with template_data, images, and linter_options
-    
+
     Enhanced mode enables inline image support via base64 encoded PNGs and custom linter configuration.
-    
+
     **NEW: Integrated Template Linting**
     - Templates are automatically validated before processing (strict mode by default)
     - If validation fails, comprehensive error report is returned as PDF (or JSON if explicitly requested)
     - Linter options can be customized in enhanced mode via 'linter_options' field
     - Status code is always 200 for linting results (errors or success)
     - Processing only continues if template validation passes
-    
+
     Handles all stages with comprehensive error reporting:
     - File validation and upload
     - Template linting and syntax validation (NEW)
@@ -737,7 +830,7 @@ async def process_document_template(
     """
     file_path = None
     pdf_file_path = None
-    
+
     try:
         # Input validation
         if not file or not file.filename or file.filename == '':
@@ -747,7 +840,7 @@ async def process_document_template(
                 details={"requirement": "A valid .docx file must be uploaded"}
             )
             return create_error_response(error, 400)
-        
+
         if not file.filename.lower().endswith('.docx'):
             error = FileProcessingError(
                 message="Invalid file type. Only .docx files are supported",
@@ -759,7 +852,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 400)
-        
+
         # Smart parameter detection - determine usage mode
         if request_data is not None:
             # Enhanced mode: process request_data with potential images
@@ -770,7 +863,8 @@ async def process_document_template(
                 images_data = request_obj.images
                 api_undefined_behavior = request_obj.undefined_behavior
                 api_linter_options = request_obj.linter_options
-                logger.info(f"Enhanced mode: Processing with {len(template_data)} data keys and {len(images_data or {})} images")
+                logger.info(
+                    f"Enhanced mode: Processing with {len(template_data)} data keys and {len(images_data or {})} images")
             except json.JSONDecodeError as e:
                 error = TemplateProcessingError(
                     message=f"Invalid JSON in request_data: {str(e)}",
@@ -797,7 +891,8 @@ async def process_document_template(
             images_data = None
             api_undefined_behavior = None
             api_linter_options = None
-            logger.info(f"Legacy mode: Processing with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data")
+            logger.info(
+                f"Legacy mode: Processing with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data")
         else:
             # No data provided at all
             error = TemplateProcessingError(
@@ -812,7 +907,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 400)
-        
+
         if template_data is None or (isinstance(template_data, (list, dict)) and len(template_data) == 0):
             error = TemplateProcessingError(
                 message="No template data provided",
@@ -823,7 +918,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 400)
-        
+
         # Additional validation for legacy mode only (enhanced mode already validated)
         if request_data is None:
             try:
@@ -841,16 +936,17 @@ async def process_document_template(
                     }
                 )
                 return create_error_response(error, 400)
-        
+
         # Setup file paths
-        sanitized_filename = "".join(c for c in file.filename if c.isalnum() or c in '._-')
+        sanitized_filename = "".join(
+            c for c in file.filename if c.isalnum() or c in '._-')
         base_name = os.path.splitext(sanitized_filename)[0]
         file_path = f'temp/{sanitized_filename}'
         pdf_file_path = f'temp/{base_name}.pdf'
-        
+
         # Ensure temp directory exists
         os.makedirs('temp', exist_ok=True)
-        
+
         # Stage 1: File Upload and Validation
         try:
             # Check file size (optional limit)
@@ -862,12 +958,13 @@ async def process_document_template(
                         raise FileProcessingError(
                             message="File too large. Maximum size is 50MB",
                             error_type="file_too_large",
-                            details={"max_size_mb": 50, "file_size_bytes": file_size}
+                            details={"max_size_mb": 50,
+                                     "file_size_bytes": file_size}
                         )
                     await out_file.write(chunk)
-            
+
             logger.info(f"File uploaded successfully: {file_size} bytes")
-            
+
         except IOError as e:
             error = FileProcessingError(
                 message=f"Failed to save uploaded file: {str(e)}",
@@ -878,7 +975,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-        
+
         # Stage 1.5: Template Linting (Pre-validation)
         try:
             # Configure linting options - strict by default
@@ -896,11 +993,11 @@ async def process_document_template(
                     check_nested_structure=True
                 )
                 logger.info("Using default strict linter options")
-            
+
             # Read file content for linting
             with open(file_path, 'rb') as f:
                 file_content = f.read()
-            
+
             # Perform linting
             logger.info(f"Starting template validation for {file.filename}")
             lint_result = await linter_service.lint_docx_file(
@@ -908,15 +1005,16 @@ async def process_document_template(
                 filename=file.filename,
                 options=linter_options
             )
-            
+
             # Check linting results
             if not lint_result.success:
-                logger.warning(f"Template validation failed: {lint_result.summary.total_errors} errors found")
-                
+                logger.warning(
+                    f"Template validation failed: {lint_result.summary.total_errors} errors found")
+
                 # Clean up uploaded file before returning error
                 if os.path.exists(file_path):
                     os.remove(file_path)
-                
+
                 # Return linting error report based on format preference
                 # Check if user explicitly requested JSON format via linter options
                 if api_linter_options and api_linter_options.response_format == LintResponseFormat.JSON:
@@ -964,22 +1062,25 @@ async def process_document_template(
                     )
                 else:
                     # Return PDF error report (default behavior, 200 OK)
-                    logger.info(f"Generating PDF error report for failed template validation")
+                    logger.info(
+                        f"Generating PDF error report for failed template validation")
                     # Use the template_data that was already extracted earlier in the function
                     return await _generate_lint_pdf_report(lint_result, file.filename, template_data)
             else:
-                logger.info(f"Template validation passed: {lint_result.summary.completeness_score:.1f}% completeness score")
+                logger.info(
+                    f"Template validation passed: {lint_result.summary.completeness_score:.1f}% completeness score")
                 if lint_result.warnings:
-                    logger.info(f"Template has {lint_result.summary.total_warnings} warnings (non-blocking)")
-            
+                    logger.info(
+                        f"Template has {lint_result.summary.total_warnings} warnings (non-blocking)")
+
         except Exception as e:
             logger.error(f"Template linting failed: {str(e)}")
             logger.error(f"Linting error traceback: {traceback.format_exc()}")
-            
+
             # Clean up uploaded file
             if os.path.exists(file_path):
                 os.remove(file_path)
-            
+
             # For linting failures, return JSON error response as fallback
             return JSONResponse(
                 status_code=200,
@@ -994,97 +1095,111 @@ async def process_document_template(
                     }
                 }
             )
-        
+
         # Stage 2: Template Loading and Image Processing
         try:
             document = DocxTemplate(file_path)
             logger.info("Template loaded successfully")
-            
+
             # Process images if in enhanced mode
             if images_data:
                 processed_images = process_images(images_data, document)
                 # Merge template data with processed images
                 context_data = template_data.copy()
                 context_data.update(processed_images)
-                logger.info(f"Enhanced mode: Context prepared with {len(context_data)} variables (including {len(processed_images)} images)")
+                logger.info(
+                    f"Enhanced mode: Context prepared with {len(context_data)} variables (including {len(processed_images)} images)")
             else:
                 # Legacy mode: use template_data directly
                 context_data = template_data
-                logger.info(f"Legacy mode: Context prepared with {len(context_data)} variables")
-            
+                logger.info(
+                    f"Legacy mode: Context prepared with {len(context_data)} variables")
+
             # Convert dictionary values to objects for dot notation access
             # This helps when templates use {{data.field}} but data is sent as {"data": {"field": "value"}}
             context_data_with_objects = {}
             for key, value in context_data.items():
                 context_data_with_objects[key] = convert_dict_to_object(value)
-            
+
             logger.info("Context data prepared with dot notation support")
-            
+
         except Exception as e:
             # Clean up uploaded file
             if os.path.exists(file_path):
                 os.remove(file_path)
-            
+
             # Handle template errors
             template_error = handle_template_error(e, file.filename)
             return create_error_response(template_error, 400)
-        
+
         # Stage 3: Template Rendering with Data Injection
         try:
             # Create custom Jinja2 environment with configurable undefined behavior
             from jinja2 import Environment
-            
+
             # Choose undefined behavior: API parameter overrides environment variable
-            # Options: "debug" (default), "silent", "strict"
+            # Options: "silent" (default), "debug", "strict", "property_missing"
             if api_undefined_behavior is not None:
                 undefined_behavior = api_undefined_behavior.lower()
-                logger.info(f"Using API-specified undefined behavior: {undefined_behavior}")
+                logger.info(
+                    f"Using API-specified undefined behavior: {undefined_behavior}")
             else:
-                undefined_behavior = os.environ.get("UNDEFINED_BEHAVIOR", "debug").lower()
-                logger.info(f"Using environment-specified undefined behavior: {undefined_behavior}")
-            
+                undefined_behavior = os.environ.get(
+                    "UNDEFINED_BEHAVIOR", "silent").lower()
+                logger.info(
+                    f"Using environment-specified undefined behavior: {undefined_behavior}")
+
             if undefined_behavior == "debug":
                 undefined_class = DebugUndefined
-                logger.info("Using DebugUndefined - missing variables will show as [Missing variable: name]")
+                logger.info(
+                    "Using DebugUndefined - missing variables will show as [Missing variable: name]")
             elif undefined_behavior == "silent":
                 undefined_class = SilentUndefined
-                logger.info("Using SilentUndefined - missing variables will be empty")
+                logger.info(
+                    "Using SilentUndefined - missing variables will be empty")
+            elif undefined_behavior == "property_missing":
+                undefined_class = PropertyMissingUndefined
+                logger.info(
+                    "Using PropertyMissingUndefined - missing variables will show as '<property missing in json>'")
             else:  # "strict" or any other value
                 undefined_class = StrictUndefined
-                logger.info("Using StrictUndefined - missing variables will raise errors")
-            
+                logger.info(
+                    "Using StrictUndefined - missing variables will raise errors")
+
             jinja_env = Environment(undefined=undefined_class)
-            
+
             # Render template with context data (includes images if provided)
             document.render(context_data_with_objects, jinja_env)
             logger.info("Template rendered successfully")
-            
+
         except Exception as e:
             # Log the actual error for debugging
-            logger.error(f"Template rendering error: {type(e).__name__}: {str(e)}")
-            logger.error(f"Template rendering traceback: {traceback.format_exc()}")
-            
+            logger.error(
+                f"Template rendering error: {type(e).__name__}: {str(e)}")
+            logger.error(
+                f"Template rendering traceback: {traceback.format_exc()}")
+
             # Handle the template error first
             template_error = handle_template_error(e, file.filename)
-            
+
             # Clean up files after error handling
             for cleanup_path in [file_path]:
                 if cleanup_path and os.path.exists(cleanup_path):
                     os.remove(cleanup_path)
-            
+
             return create_error_response(template_error, 400)
-        
+
         # Stage 4: Save Rendered Document
         try:
             document.save(file_path)
             logger.info("Rendered document saved successfully")
-            
+
         except Exception as e:
             # Clean up files
             for cleanup_path in [file_path]:
                 if cleanup_path and os.path.exists(cleanup_path):
                     os.remove(cleanup_path)
-            
+
             error = FileProcessingError(
                 message=f"Failed to save rendered document: {str(e)}",
                 error_type="document_save_error",
@@ -1094,7 +1209,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-        
+
         # Stage 5: PDF Conversion with Gotenberg
         try:
             gotenberg_url = get_env('GOTENBERG_API_URL')
@@ -1104,21 +1219,22 @@ async def process_document_template(
                     error_type="gotenberg_not_configured",
                     details={"env_var": "GOTENBERG_API_URL"}
                 )
-            
+
             resource_url = f'{gotenberg_url}/forms/libreoffice/convert'
-            
+
             logger.info(f"Converting to PDF via Gotenberg: {resource_url}")
-            
+
             with open(file_path, 'rb') as doc_file:
-                files = {'files': (file.filename, doc_file, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
-                
+                files = {'files': (
+                    file.filename, doc_file, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')}
+
                 # Make request to Gotenberg with timeout
                 response = requests.post(
-                    url=resource_url, 
+                    url=resource_url,
                     files=files,
                     timeout=60  # 60 second timeout
                 )
-            
+
             # Check Gotenberg response
             if response.status_code != 200:
                 error_details = {
@@ -1126,33 +1242,35 @@ async def process_document_template(
                     "status_code": response.status_code,
                     "response_headers": dict(response.headers)
                 }
-                
+
                 # Try to extract error message from response
                 try:
                     if response.headers.get('content-type', '').startswith('application/json'):
                         error_data = response.json()
                         error_details["error_data"] = error_data
                     else:
-                        error_details["response_text"] = response.text[:500]  # First 500 chars
+                        # First 500 chars
+                        error_details["response_text"] = response.text[:500]
                 except:
-                    error_details["response_text"] = response.text[:500] if response.text else "No response text"
-                
+                    error_details["response_text"] = response.text[:
+                                                                   500] if response.text else "No response text"
+
                 if response.status_code == 400:
                     message = "Gotenberg rejected the document (bad request)"
                 elif response.status_code == 422:
-                    message = "Gotenberg could not process the document (unprocessable entity)"  
+                    message = "Gotenberg could not process the document (unprocessable entity)"
                 elif response.status_code == 500:
                     message = "Gotenberg internal server error"
                 else:
                     message = f"Gotenberg conversion failed with status {response.status_code}"
-                
+
                 error = PDFConversionError(
                     message=message,
                     error_type="gotenberg_conversion_failed",
                     details=error_details
                 )
                 return create_error_response(error, 500)
-            
+
             # Validate response content
             if not response.content:
                 error = PDFConversionError(
@@ -1161,7 +1279,7 @@ async def process_document_template(
                     details={"gotenberg_url": resource_url}
                 )
                 return create_error_response(error, 500)
-            
+
             # Check if response is actually a PDF
             if not response.content.startswith(b'%PDF'):
                 error = PDFConversionError(
@@ -1174,9 +1292,10 @@ async def process_document_template(
                     }
                 )
                 return create_error_response(error, 500)
-            
-            logger.info(f"PDF conversion successful, size: {len(response.content)} bytes")
-            
+
+            logger.info(
+                f"PDF conversion successful, size: {len(response.content)} bytes")
+
         except requests.exceptions.Timeout:
             error = PDFConversionError(
                 message="Gotenberg request timed out (60s)",
@@ -1187,7 +1306,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-            
+
         except requests.exceptions.ConnectionError as e:
             error = PDFConversionError(
                 message=f"Cannot connect to Gotenberg service: {str(e)}",
@@ -1199,7 +1318,7 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-            
+
         except Exception as e:
             error = PDFConversionError(
                 message=f"PDF conversion error: {str(e)}",
@@ -1211,14 +1330,14 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-        
+
         # Stage 6: Save PDF Response
         try:
             async with aiofiles.open(pdf_file_path, 'wb') as out_file:
                 await out_file.write(response.content)
-            
+
             logger.info(f"PDF saved successfully: {pdf_file_path}")
-            
+
         except IOError as e:
             error = FileProcessingError(
                 message=f"Failed to save PDF file: {str(e)}",
@@ -1229,24 +1348,24 @@ async def process_document_template(
                 }
             )
             return create_error_response(error, 500)
-        
+
         # Success: Return PDF file
         return FileResponse(
-            pdf_file_path, 
+            pdf_file_path,
             media_type='application/pdf',
             filename=f"{base_name}.pdf"
         )
-        
+
     except DocumentProcessingError as e:
         # Re-raise our custom errors to be handled by the error response
         logger.error(f"Document processing error: {e.message} - {e.details}")
         return create_error_response(e, 500)
-        
+
     except Exception as e:
         # Unexpected error - log full traceback and return generic error
         logger.error(f"Unexpected error processing document: {str(e)}")
         logger.error(traceback.format_exc())
-        
+
         error = DocumentProcessingError(
             message=f"An unexpected error occurred: {str(e)}",
             error_type="unexpected_error",
@@ -1257,13 +1376,13 @@ async def process_document_template(
             }
         )
         return create_error_response(error, 500)
-        
+
     finally:
         # Clean up temporary files (except the final PDF which FastAPI will handle)
         cleanup_files = []
         if file_path and file_path != pdf_file_path:
             cleanup_files.append(file_path)
-        
+
         # Clean up temporary image files if they exist
         if 'processed_images' in locals():
             for image_obj in processed_images.values():
@@ -1271,7 +1390,7 @@ async def process_document_template(
                     temp_image_path = image_obj._temp_file_path
                     if temp_image_path and os.path.exists(temp_image_path):
                         cleanup_files.append(temp_image_path)
-        
+
         for cleanup_file in cleanup_files:
             try:
                 if cleanup_file and os.path.exists(cleanup_file):
@@ -1279,4 +1398,3 @@ async def process_document_template(
                     logger.debug(f"Cleaned up temporary file: {cleanup_file}")
             except Exception as e:
                 logger.warning(f"Failed to clean up file {cleanup_file}: {e}")
-
