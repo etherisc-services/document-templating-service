@@ -249,15 +249,6 @@ class ImageData(BaseModel):
     height_px: Optional[int] = None  # Height in pixels (alternative to mm)
 
 
-class TemplateRequest(BaseModel):
-    """Model for the complete template processing request"""
-    template_data: Dict[str, Any]  # The data to inject into the template
-    # Optional images referenced in template
-    images: Optional[Dict[str, ImageData]] = None
-    # Override undefined variable behavior: "debug", "silent", "strict", "property_missing"
-    undefined_behavior: Optional[str] = None
-    # Optional linter configuration
-    linter_options: Optional[LintOptions] = None
 
 
 def create_error_response(error: DocumentProcessingError, status_code: int = 500) -> JSONResponse:
@@ -507,7 +498,7 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.5.0",
+        "version": "1.5.1",
         "features": {
             "missing_fields_handling": True,
             "undefined_behavior_options": ["silent", "debug", "strict", "property_missing"],
@@ -818,33 +809,35 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
 
 @app.post('/api/v1/process-template-document')
 async def process_document_template(
-    data: Json = Body(None),
-    request_data: str = Body(None),
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    data: Json = Body(...),
+    undefined_behavior: Optional[str] = Body(None),
+    images: Optional[Json] = Body(None),
+    linter_options: Optional[Json] = Body(None)
 ):
     """
     Process a Word document template with data injection and convert to PDF.
 
-    Supports flexible parameter usage:
-    - Use 'data' parameter with JSON object for simple requests
-    - Use 'request_data' parameter with JSON string for complex requests
-    - Both parameters support the same features: missing fields handling, images, and linter options
+    Parameters:
+    - file: Word document template (.docx file)
+    - data: JSON object with template data for variable substitution
+    - undefined_behavior: Optional behavior for missing fields ("silent", "debug", "strict", "property_missing")
+    - images: Optional JSON object with base64 encoded images
+    - linter_options: Optional JSON object with template validation settings
 
-    Both modes enable inline image support via base64 encoded PNGs and custom linter configuration.
-
-    **NEW: Integrated Template Linting**
-    - Templates are automatically validated before processing (strict mode by default)
-    - If validation fails, comprehensive error report is returned as PDF (or JSON if explicitly requested)
-    - Linter options can be customized in enhanced mode via 'linter_options' field
-    - Status code is always 200 for linting results (errors or success)
-    - Processing only continues if template validation passes
-
-    Handles all stages with comprehensive error reporting:
-    - File validation and upload
-    - Template linting and syntax validation (NEW)
-    - Data injection with variable checking
-    - Image processing (when images provided)
+    Features:
+    - Graceful missing fields handling (configurable behavior)
+    - Inline image support via base64 encoded PNGs
+    - Integrated template linting and validation
+    - Comprehensive error reporting
     - PDF conversion with Gotenberg
+
+    Processing stages:
+    1. File validation and upload
+    2. Template linting and syntax validation
+    3. Data injection with configurable undefined variable handling
+    4. Image processing (when images provided)
+    5. PDF conversion with Gotenberg
     """
     file_path = None
     pdf_file_path = None
@@ -871,103 +864,13 @@ async def process_document_template(
             )
             return create_error_response(error, 400)
 
-        # Unified parameter processing - both 'data' and 'request_data' work identically
-        template_data = None
-        images_data = None
-        api_undefined_behavior = None
-        api_linter_options = None
+        # Clean parameter processing
+        template_data = data
+        images_data = images
+        api_undefined_behavior = undefined_behavior
+        api_linter_options = linter_options
         
-        if request_data is not None:
-            # Process request_data parameter (JSON string format)
-            try:
-                parsed_request = json.loads(request_data)
-                if isinstance(parsed_request, dict):
-                    # Check if it's a TemplateRequest structure or simple data
-                    if "template_data" in parsed_request:
-                        # Full TemplateRequest structure
-                        request_obj = TemplateRequest(**parsed_request)
-                        template_data = request_obj.template_data
-                        images_data = request_obj.images
-                        api_undefined_behavior = request_obj.undefined_behavior
-                        api_linter_options = request_obj.linter_options
-                    else:
-                        # Simple data structure - treat as template_data
-                        template_data = parsed_request
-                        images_data = None
-                        api_undefined_behavior = None
-                        api_linter_options = None
-                else:
-                    template_data = parsed_request
-                    images_data = None
-                    api_undefined_behavior = None
-                    api_linter_options = None
-                    
-                logger.info(f"Processing request_data with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
-            except json.JSONDecodeError as e:
-                error = TemplateProcessingError(
-                    message=f"Invalid JSON in request_data: {str(e)}",
-                    error_type="invalid_json",
-                    details={
-                        "json_error": str(e),
-                        "suggestion": "Ensure request_data is valid JSON"
-                    }
-                )
-                return create_error_response(error, 400)
-            except Exception as e:
-                error = TemplateProcessingError(
-                    message=f"Invalid request structure: {str(e)}",
-                    error_type="invalid_request_structure",
-                    details={
-                        "error": str(e),
-                        "suggestion": "Ensure request follows valid JSON structure"
-                    }
-                )
-                return create_error_response(error, 400)
-        elif data is not None:
-            # Process data parameter (can be JSON object or TemplateRequest-like structure)
-            if isinstance(data, dict):
-                # Check if it's a TemplateRequest structure or simple data
-                if "template_data" in data:
-                    # TemplateRequest-like structure in data parameter
-                    try:
-                        request_obj = TemplateRequest(**data)
-                        template_data = request_obj.template_data
-                        images_data = request_obj.images
-                        api_undefined_behavior = request_obj.undefined_behavior
-                        api_linter_options = request_obj.linter_options
-                    except Exception as e:
-                        # Fallback to treating as simple template data
-                        template_data = data
-                        images_data = None
-                        api_undefined_behavior = None
-                        api_linter_options = None
-                else:
-                    # Simple data structure - treat as template_data
-                    template_data = data
-                    images_data = None
-                    api_undefined_behavior = None
-                    api_linter_options = None
-            else:
-                template_data = data
-                images_data = None
-                api_undefined_behavior = None
-                api_linter_options = None
-                
-            logger.info(f"Processing data parameter with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
-        else:
-            # No data provided at all
-            error = TemplateProcessingError(
-                message="No template data provided. Use either 'data' parameter or 'request_data' parameter",
-                error_type="missing_template_data",
-                details={
-                    "requirement": "Provide either 'data' (JSON object) or 'request_data' (JSON string)",
-                    "examples": {
-                        "legacy": '{"name": "John Doe"}',
-                        "enhanced": '{"template_data": {"name": "John Doe"}, "images": {}}'
-                    }
-                }
-            )
-            return create_error_response(error, 400)
+        logger.info(f"Processing template with {len(template_data) if isinstance(template_data, dict) else 'non-dict'} data keys and {len(images_data or {})} images")
 
         if template_data is None or (isinstance(template_data, (list, dict)) and len(template_data) == 0):
             error = TemplateProcessingError(
@@ -980,23 +883,20 @@ async def process_document_template(
             )
             return create_error_response(error, 400)
 
-        # Additional validation for legacy mode only (enhanced mode already validated)
-        if request_data is None:
-            try:
-                if isinstance(template_data, str):
-                    template_data = json.loads(template_data)
-            except json.JSONDecodeError as e:
-                error = TemplateProcessingError(
-                    message=f"Invalid JSON data: {str(e)}",
-                    error_type="invalid_json",
-                    details={
-                        "json_error": str(e),
-                        "line": getattr(e, 'lineno', None),
-                        "column": getattr(e, 'colno', None),
-                        "suggestion": "Ensure the data parameter contains valid JSON"
-                    }
-                )
-                return create_error_response(error, 400)
+        # Validate that template_data is JSON serializable
+        try:
+            json.dumps(template_data)
+        except (TypeError, ValueError) as e:
+            error = TemplateProcessingError(
+                message=f"Invalid template data: {str(e)}",
+                error_type="invalid_json_data",
+                details={
+                    "json_error": str(e),
+                    "data_type": type(template_data).__name__,
+                    "suggestion": "Ensure all data values are JSON serializable (strings, numbers, booleans, lists, dicts)"
+                }
+            )
+            return create_error_response(error, 400)
 
         # Setup file paths
         sanitized_filename = "".join(
