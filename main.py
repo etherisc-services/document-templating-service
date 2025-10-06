@@ -4,7 +4,7 @@ import logging
 import os
 import tempfile
 import traceback
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import aiofiles
 import requests
@@ -584,7 +584,7 @@ async def healthcheck():
 async def get_version():
     """Get the current version of the service"""
     return {
-        "version": "1.8.0",
+        "version": "1.8.1",
         "features": {
             "missing_fields_handling": True,
             "chainable_undefined_support": True,
@@ -896,31 +896,33 @@ async def _generate_lint_pdf_report(lint_result: LintResult, document_name: str,
         )
 
 
-def validate_json_property_names(data: dict, path: str = "") -> list:
+def validate_json_property_names(data: dict, path: str = "") -> List[str]:
     """
     Recursively validate JSON property names for invalid characters (dashes).
     Returns a list of property paths that contain dashes.
     """
     invalid_properties = []
-    
+
     if isinstance(data, dict):
         for key, value in data.items():
             current_path = f"{path}.{key}" if path else key
-            
+
             # Check if the current key contains dashes
             if '-' in key:
                 invalid_properties.append(current_path)
-            
+
             # Recursively check nested objects
             if isinstance(value, (dict, list)):
-                invalid_properties.extend(validate_json_property_names(value, current_path))
-    
+                invalid_properties.extend(
+                    validate_json_property_names(value, current_path))
+
     elif isinstance(data, list):
         for i, item in enumerate(data):
             current_path = f"{path}[{i}]"
             if isinstance(item, (dict, list)):
-                invalid_properties.extend(validate_json_property_names(item, current_path))
-    
+                invalid_properties.extend(
+                    validate_json_property_names(item, current_path))
+
     return invalid_properties
 
 
